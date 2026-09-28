@@ -1,18 +1,22 @@
 package com.pgs.user.service.service;
 
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.Objects;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.pgs.user.service.dto.PageResponse;
 import com.pgs.user.service.dto.UserDto;
 import com.pgs.user.service.dto.UserFilterDto;
 import com.pgs.user.service.entity.User;
+import com.pgs.user.service.exception.UserAlreadyExistsException;
+import com.pgs.user.service.exception.UserNotFoundException;
 import com.pgs.user.service.repository.UserRepository;
 import com.pgs.user.service.repository.UserSpecification;
 
@@ -27,6 +31,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final String CACHE_USERS = "users";
+
     private final UserRepository userRepository;
 
     /**
@@ -34,9 +40,15 @@ public class UserService {
      *
      * @param input the user data to create
      * @return the created user as a DTO
+     * @throws UserAlreadyExistsException if a user with the same email already exists
      */
+    @Transactional
     public UserDto createUser(UserDto input) {
-        final User createdUser = User.builder()
+        if (userRepository.existsByEmail(input.getEmail())) {
+            throw new UserAlreadyExistsException(input.getEmail());
+        }
+
+        User createdUser = User.builder()
                 .name(input.getName())
                 .surname(input.getSurname())
                 .email(input.getEmail())
@@ -45,7 +57,8 @@ public class UserService {
                 .energyAlertingThreshold(input.getEnergyAlertingThreshold())
                 .build();
 
-        final User saved = userRepository.save(createdUser);
+        User saved = userRepository.save(createdUser);
+        log.debug("Created user with id={}", saved.getId());
         return toDto(saved);
     }
 
@@ -54,6 +67,7 @@ public class UserService {
      *
      * @return the list of users as DTOs
      */
+    @Transactional(readOnly = true)
     public List<UserDto> getAllUsers() {
         return userRepository.findAll()
                 .stream()
@@ -68,9 +82,10 @@ public class UserService {
      * @param size the page size
      * @return a page of users as DTOs
      */
-    public Page<UserDto> getUsersPaginated(int page, int size) {
-        return userRepository.findAll(PageRequest.of(page, size))
-                .map(this::toDto);
+    @Transactional(readOnly = true)
+    public PageResponse<UserDto> getUsersPaginated(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return PageResponse.of(userRepository.findAll(pageable).map(this::toDto));
     }
 
     /**
@@ -81,32 +96,26 @@ public class UserService {
      * @param size   the page size
      * @return a page of matching users as DTOs
      */
-    public Page<UserDto> searchUsers(UserFilterDto filter, int page, int size) {
-        Specification<User> spec = Stream.of(
-                        UserSpecification.nameContains(filter.getName()),
-                        UserSpecification.surnameContains(filter.getSurname()),
-                        UserSpecification.emailContains(filter.getEmail()),
-                        UserSpecification.addressContains(filter.getAddress()),
-                        UserSpecification.alertingEquals(filter.getAlerting()),
-                        UserSpecification.thresholdGreaterThanOrEqual(filter.getMinEnergyAlertingThreshold()))
-                .reduce(Specification::and)
-                .orElse((root, query, cb) -> cb.conjunction());
-
-        return userRepository.findAll(spec, PageRequest.of(page, size))
-                .map(this::toDto);
+    @Transactional(readOnly = true)
+    public PageResponse<UserDto> searchUsers(UserFilterDto filter, int page, int size) {
+        Specification<User> spec = buildSpecification(filter);
+        Pageable pageable = PageRequest.of(page, size);
+        return PageResponse.of(userRepository.findAll(spec, pageable).map(this::toDto));
     }
-    
+
     /**
      * Retrieves a user by ID, using cache when available.
      *
      * @param id the user ID
-     * @return the user as a DTO, or {@code null} if not found
+     * @return the user as a DTO
+     * @throws UserNotFoundException if the user does not exist
      */
-    @Cacheable(value = "users", key = "#id")
+    @Transactional(readOnly = true)
+    @Cacheable(value = CACHE_USERS, key = "#id")
     public UserDto getUserById(Long id) {
         return userRepository.findById(id)
                 .map(this::toDto)
-                .orElse(null);
+                .orElseThrow(() -> new UserNotFoundException(id));
     }
 
     /**
@@ -114,12 +123,14 @@ public class UserService {
      *
      * @param id  the user ID
      * @param dto the updated user data
-     * @throws IllegalArgumentException if the user is not found
+     * @return the updated user as a DTO
+     * @throws UserNotFoundException if the user does not exist
      */
-    @CacheEvict(value = "users", key = "#id")
-    public void updateUser(Long id, UserDto dto) {
+    @Transactional
+    @CacheEvict(value = CACHE_USERS, key = "#id")
+    public UserDto updateUser(Long id, UserDto dto) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(id));
 
         user.setName(dto.getName());
         user.setSurname(dto.getSurname());
@@ -128,20 +139,48 @@ public class UserService {
         user.setAlerting(dto.isAlerting());
         user.setEnergyAlertingThreshold(dto.getEnergyAlertingThreshold());
 
-        userRepository.save(user);
+        // No hace falta userRepository.save(user): la entidad está gestionada
+        // por el EntityManager dentro de la transacción y se hace flush al commit.
+        log.debug("Updated user with id={}", id);
+        return toDto(user);
     }
 
     /**
      * Deletes a user by ID and evicts the cache entry.
      *
      * @param id the user ID
-     * @throws IllegalArgumentException if the user is not found
+     * @throws UserNotFoundException if the user does not exist
      */
-    @CacheEvict(value = "users", key = "#id")
+    @Transactional
+    @CacheEvict(value = CACHE_USERS, key = "#id")
     public void deleteUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        userRepository.delete(user);
+        if (!userRepository.existsById(id)) {
+            throw new UserNotFoundException(id);
+        }
+        userRepository.deleteById(id);
+        log.debug("Deleted user with id={}", id);
+    }
+
+    /**
+     * Builds the JPA specification from the filter, skipping null/blank fields.
+     *
+     * @param filter the filter criteria
+     * @return the combined specification (never {@code null})
+     */
+    private Specification<User> buildSpecification(UserFilterDto filter) {
+    	Specification<User> spec = Specification.where((Specification<User>) null);
+        if (filter == null) {
+            return spec;
+        }
+
+        spec = spec.and(UserSpecification.nameContains(filter.getName()))
+                   .and(UserSpecification.surnameContains(filter.getSurname()))
+                   .and(UserSpecification.emailContains(filter.getEmail()))
+                   .and(UserSpecification.addressContains(filter.getAddress()))
+                   .and(UserSpecification.alertingEquals(filter.getAlerting()))
+                   .and(UserSpecification.thresholdGreaterThanOrEqual(filter.getMinEnergyAlertingThreshold()));
+
+        return spec;
     }
 
     /**
@@ -151,6 +190,7 @@ public class UserService {
      * @return the corresponding user DTO
      */
     private UserDto toDto(User user) {
+        Objects.requireNonNull(user, "user must not be null");
         return UserDto.builder()
                 .id(user.getId())
                 .name(user.getName())
