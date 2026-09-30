@@ -16,97 +16,179 @@
 	<properties>
 		<java.version>21</java.version>
 	</properties>
+	
 	<dependencies>
-		<dependency>
-		    <groupId>org.springframework.boot</groupId>
-		    <artifactId>spring-boot-starter-aspectj</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-flyway</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>3.1.1</version>
-		</dependency>
-		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-mysql</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.mysql</groupId>
-			<artifactId>mysql-connector-j</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<version>1.18.36</version>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<version>2.4.240</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-flyway-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-		    <groupId>org.springframework.boot</groupId>
-		    <artifactId>spring-boot-resttestclient</artifactId>
-		    <scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-restclient</artifactId>
-			<version>4.1.0</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>testcontainers</artifactId>
-			<version>1.21.3</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<version>1.21.3</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>mysql</artifactId>
-			<version>1.21.3</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-		    <groupId>org.springframework.boot</groupId>
-		    <artifactId>spring-boot-starter-data-redis</artifactId>
-		</dependency>
+
+	    <!-- ============================================================ -->
+	    <!--  CORE (Production)                                            -->
+	    <!--  Starters y dependencias que van al runtime de la app.        -->
+	    <!-- ============================================================ -->
+	
+	    <!-- Spring Boot Web MVC: controllers REST + Tomcat embebido -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-webmvc</artifactId>
+	    </dependency>
+	
+	    <!-- Spring Data JPA + Hibernate: capa de persistencia -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-data-jpa</artifactId>
+	    </dependency>
+	
+	    <!-- Spring Data Redis: cache distribuida (usada por @Cacheable / @CacheEvict) -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-data-redis</artifactId>
+	    </dependency>
+	
+	    <!-- AOP (AspectJ): aspects para logging y medición de tiempos -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-aspectj</artifactId>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  DATABASE MIGRATIONS (Production)                             -->
+	    <!--  Flyway versiona el esquema. flyway-mysql es OBLIGATORIO      -->
+	    <!--  para MySQL moderno (dialecto específico).                    -->
+	    <!-- ============================================================ -->
+	
+	    <!-- Flyway core: motor de migraciones -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-flyway</artifactId>
+	    </dependency>
+	
+	    <!-- Flyway dialecto MySQL (sin esto, Flyway no soporta MySQL 8) -->
+	    <dependency>
+	        <groupId>org.flywaydb</groupId>
+	        <artifactId>flyway-mysql</artifactId>
+	    </dependency>
+	
+	    <!-- Driver JDBC de MySQL (runtime, no se usa en compilación) -->
+	    <dependency>
+	        <groupId>com.mysql</groupId>
+	        <artifactId>mysql-connector-j</artifactId>
+	        <scope>runtime</scope>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  API DOCUMENTATION (Production)                               -->
+	    <!--  SpringDoc genera Swagger UI + OpenAPI spec desde las        -->
+	    <!--  anotaciones del código.                                     -->
+	    <!-- ============================================================ -->
+	
+	    <dependency>
+	        <groupId>org.springdoc</groupId>
+	        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+	        <version>3.1.1</version>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  DEVELOPER TOOLS (Production, optional)                       -->
+	    <!--  Lombok reduce boilerplate (getters, builders, constructores).-->
+	    <!--  Solo se necesita en compilación, no en runtime.             -->
+	    <!-- ============================================================ -->
+	
+	    <dependency>
+	        <groupId>org.projectlombok</groupId>
+	        <artifactId>lombok</artifactId>
+	        <version>1.18.36</version>
+	        <optional>true</optional>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  TESTING - Spring Boot Test starters                          -->
+	    <!--  Starters oficiales de Spring Boot 4 para tests por capa.     -->
+	    <!--  Traen transitivamente JUnit 5, Mockito, AssertJ, etc.        -->
+	    <!-- ============================================================ -->
+	
+	    <!-- JPA slice tests: @DataJpaTest con BD embebida -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- Web slice tests: @WebMvcTest + MockMvc -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-webmvc-test</artifactId>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- Flyway tests: para testear migraciones en tests de integración -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-flyway-test</artifactId>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  TESTING - TestRestTemplate (E2E tests)                       -->
+	    <!--  Spring Boot 4 ha separado TestRestTemplate en su propio      -->
+	    <!--  starter. Se necesita el resttestclient + restclient.         -->
+	    <!-- ============================================================ -->
+	
+	    <!-- TestRestTemplate: cliente HTTP para tests E2E -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-resttestclient</artifactId>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- RestClient: dependencia de bajo nivel que usa TestRestTemplate -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-restclient</artifactId>
+	        <version>4.1.0</version>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  TESTING - Testcontainers                                     -->
+	    <!--  Levanta contenedores Docker (MySQL, Redis) para tests E2E.   -->
+	    <!--  Se destruyen al terminar el test.                            -->
+	    <!-- ============================================================ -->
+	
+	    <!-- Testcontainers core -->
+	    <dependency>
+	        <groupId>org.testcontainers</groupId>
+	        <artifactId>testcontainers</artifactId>
+	        <version>1.21.3</version>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- Integración de Testcontainers con JUnit 5 (@Testcontainers, @Container) -->
+	    <dependency>
+	        <groupId>org.testcontainers</groupId>
+	        <artifactId>junit-jupiter</artifactId>
+	        <version>1.21.3</version>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- Módulo MySQL de Testcontainers (MySQLContainer) -->
+	    <dependency>
+	        <groupId>org.testcontainers</groupId>
+	        <artifactId>mysql</artifactId>
+	        <version>1.21.3</version>
+	        <scope>test</scope>
+	    </dependency>
+	
+	    <!-- ============================================================ -->
+	    <!--  TESTING - Bases de datos embebidas                           -->
+	    <!--  H2 en modo MySQL se usa en los JPA slice tests para no       -->
+	    <!--  depender de Docker/MySQL real en cada ejecución.             -->
+	    <!-- ============================================================ -->
+	
+	    <dependency>
+	        <groupId>com.h2database</groupId>
+	        <artifactId>h2</artifactId>
+	        <version>2.4.240</version>
+	        <scope>test</scope>
+	    </dependency>
+	
 	</dependencies>
 
 	<build>

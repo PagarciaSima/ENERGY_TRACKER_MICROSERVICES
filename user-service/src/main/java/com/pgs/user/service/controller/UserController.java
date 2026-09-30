@@ -32,7 +32,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * REST controller for managing users.
@@ -41,6 +44,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/user")
 @RequiredArgsConstructor
+@Validated
 public class UserController {
 
 	private final UserService userService;
@@ -88,8 +92,8 @@ public class UserController {
 			@ApiResponse(responseCode = "500", description = "Internal Server Error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))) })
 	@GetMapping("/page")
 	public ResponseEntity<PageResponse<UserDto>> getUsersPaginated(
-			@Parameter(description = "Page index (zero-based)", example = "0") @RequestParam(defaultValue = "0") int page,
-			@Parameter(description = "Page size", example = "10") @RequestParam(defaultValue = "10") int size) {
+			@Parameter(description = "Page index (zero-based)", example = "0") @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be greater than or equal to 0") int page,
+			@Parameter(description = "Page size", example = "10") @RequestParam(defaultValue = "10") @Min(value = 1, message = "size must be greater than or equal to 1") @Max(value = 100, message = "size must be less than or equal to 100") int size) {
 		return ResponseEntity.ok(userService.getUsersPaginated(page, size));
 	}
 
@@ -106,9 +110,9 @@ public class UserController {
 			@ApiResponse(responseCode = "400", description = "Invalid filter or pagination parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))) })
 	@GetMapping("/search")
-	public ResponseEntity<PageResponse<UserDto>> searchUsers(@ParameterObject @ModelAttribute UserFilterDto filter,
-			@Parameter(description = "Page index (zero-based)", example = "0") @RequestParam(defaultValue = "0") int page,
-			@Parameter(description = "Page size", example = "10") @RequestParam(defaultValue = "10") int size) {
+	public ResponseEntity<PageResponse<UserDto>> searchUsers(@Valid @ParameterObject @ModelAttribute UserFilterDto filter,
+			@Parameter(description = "Page index (zero-based)", example = "0") @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be greater than or equal to 0") int page,
+			@Parameter(description = "Page size", example = "10") @RequestParam(defaultValue = "10") @Min(value = 1, message = "size must be greater than or equal to 1") @Max(value = 100, message = "size must be less than or equal to 100") int size) {
 		return ResponseEntity.ok(userService.searchUsers(filter, page, size));
 	}
 
