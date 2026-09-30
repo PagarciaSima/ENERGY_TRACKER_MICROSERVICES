@@ -139,8 +139,7 @@ public class UserService {
         user.setAlerting(dto.isAlerting());
         user.setEnergyAlertingThreshold(dto.getEnergyAlertingThreshold());
 
-        // No hace falta userRepository.save(user): la entidad está gestionada
-        // por el EntityManager dentro de la transacción y se hace flush al commit.
+        // userRepository.save(user)not needed here because the entity is managed by EntityManager
         log.debug("Updated user with id={}", id);
         return toDto(user);
     }
@@ -168,7 +167,7 @@ public class UserService {
      * @return the combined specification (never {@code null})
      */
     private Specification<User> buildSpecification(UserFilterDto filter) {
-    	Specification<User> spec = Specification.where((Specification<User>) null);
+    	Specification<User> spec = (root, query, cb) -> cb.conjunction();
         if (filter == null) {
             return spec;
         }
