@@ -31,16 +31,18 @@ The service follows a classic **layered architecture**: `Controller → Service 
 
 ```mermaid
 flowchart LR
-    Client[External Client] -->|HTTP /api/v1/user/**| Controller[UserController]
+    Client[External Client] --> Controller[UserController]
 
     subgraph Application
         Controller --> Service[UserService]
     end
 
-    Service -->|@Cacheable / @CacheEvict| Redis[(Redis<br/>cache: users)]
+    Service --> Cache[(Redis - users cache)]
     Service --> Repository[UserRepository]
-    Repository --> DB[(MySQL<br/>home_energy_tracker)]
+    Repository --> DB[(MySQL - home_energy_tracker)]
 ```
+
+Cache interactions between the Service and Redis use Spring Cache — `@Cacheable` / `@CacheEvict` on the `users` cache.
 
 ---
 
