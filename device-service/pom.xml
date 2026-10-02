@@ -9,14 +9,26 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.pgs</groupId>
-	<artifactId>user-service</artifactId>
+	<artifactId>device-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>user-service</name>
-	<description>User Service Project</description>
+	<name/>
+	<description/>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
 	<properties>
 		<java.version>21</java.version>
 	</properties>
-	
 	<dependencies>
 
 	    <!-- ============================================================ -->
@@ -186,7 +198,6 @@
 	    </dependency>
 	
 	</dependencies>
-
 	<build>
 		<plugins>
 			<!-- Solución al error del scoping block en Eclipse -->

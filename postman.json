@@ -1,0 +1,252 @@
+{
+  "info": {
+    "name": "ENERGY_TRACKER - User & Device Services",
+    "description": "Colección para probar los microservicios de usuario (puerto 8080) y dispositivo (puerto 8081) de la plataforma Home Energy Tracker. Los id en las rutas usan variables para poder reutilizarlas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "userBaseUrl", "value": "http://localhost:8080" },
+    { "key": "deviceBaseUrl", "value": "http://localhost:8081" },
+    { "key": "userId", "value": "1" },
+    { "key": "deviceId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "User Service",
+      "item": [
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ana\",\n  \"surname\": \"García\",\n  \"email\": \"ana.garcia@example.com\",\n  \"address\": \"Calle Mayor 5, Madrid\",\n  \"alerting\": true,\n  \"energyAlertingThreshold\": 3200.5\n}"
+            },
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user"]
+            },
+            "description": "Crea un usuario (id auto-generado). Respuestas: 201 / 400 (validación) / 409 (email duplicado)."
+          }
+        },
+        {
+          "name": "List all users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user"]
+            },
+            "description": "Devuelve todos los usuarios sin paginación. Respuesta: 200 (array de UserDto)."
+          }
+        },
+        {
+          "name": "List users (paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user/page?page=0&size=10",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user", "page"],
+              "query": [
+                { "key": "page", "value": "0", "description": "Índice de página (base 0). Mín. 0." },
+                { "key": "size", "value": "10", "description": "Tamaño de página. Entre 1 y 100." }
+              ]
+            },
+            "description": "Devuelve una página de usuarios con envoltorio PageResponse."
+          }
+        },
+        {
+          "name": "Search users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user/search?name=An&surname=Garc&email=&address=Madrid&alerting=true&minEnergyAlertingThreshold=2500&page=0&size=10",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user", "search"],
+              "query": [
+                { "key": "name", "value": "An", "description": "Fragmento de nombre (opcional)" },
+                { "key": "surname", "value": "Garc", "description": "Fragmento de apellido (opcional)" },
+                { "key": "email", "value": "", "description": "Fragmento de email (opcional)" },
+                { "key": "address", "value": "Madrid", "description": "Fragmento de dirección (opcional)" },
+                { "key": "alerting", "value": "true", "description": "Booleano de alerting (opcional)" },
+                { "key": "minEnergyAlertingThreshold", "value": "2500", "description": "Umbral mínimo (opcional)" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "Busca usuarios aplicando filtros opcionales. Respuesta: PageResponse."
+          }
+        },
+        {
+          "name": "Get user by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user/{{userId}}",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user", "{{userId}}"]
+            },
+            "description": "Devuelve el usuario por id. Respuestas: 200 / 404."
+          }
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ana María\",\n  \"surname\": \"García López\",\n  \"email\": \"ana.garcia@example.com\",\n  \"address\": \"Avda. del Sol 12, Madrid\",\n  \"alerting\": true,\n  \"energyAlertingThreshold\": 2800.0\n}"
+            },
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user/{{userId}}",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user", "{{userId}}"]
+            },
+            "description": "Sustituye (PUT) todos los datos del usuario indicado. Respuestas: 200 / 400 / 404."
+          }
+        },
+        {
+          "name": "Delete user",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user/{{userId}}",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user", "{{userId}}"]
+            },
+            "description": "Elimina el usuario indicado. Respuestas: 204 (sin contenido) / 404."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Device Service",
+      "item": [
+        {
+          "name": "Create device",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Salón\",\n  \"type\": \"LIGHT\",\n  \"location\": \"Salón principal\",\n  \"userId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device"]
+            },
+            "description": "Crea un dispositivo vinculado a un userId (id auto-generado). Tipos válidos: SPEAKER, CAMERA, THERMOSTAT, LIGHT, LOCK, DOORBELL. Respuestas: 201 / 400."
+          }
+        },
+        {
+          "name": "List devices (paginated)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device?page=0&size=10",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "Devuelve una página de todos los dispositivos. Respuesta: PageResponse."
+          }
+        },
+        {
+          "name": "Search devices",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device/search?name=Sal&type=LIGHT&location=Madrid&userId=1&page=0&size=10",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device", "search"],
+              "query": [
+                { "key": "name", "value": "Sal", "description": "Fragmento de nombre (opcional)" },
+                { "key": "type", "value": "LIGHT", "description": "Tipo exacto: SPEAKER/CAMERA/THERMOSTAT/LIGHT/LOCK/DOORBELL" },
+                { "key": "location", "value": "Madrid", "description": "Fragmento de ubicación (opcional)" },
+                { "key": "userId", "value": "1", "description": "Id del usuario propietario (opcional)" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "Busca dispositivos aplicando filtros opcionales. Respuesta: PageResponse."
+          }
+        },
+        {
+          "name": "Get device by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device/{{deviceId}}",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device", "{{deviceId}}"]
+            },
+            "description": "Devuelve el dispositivo por id. Respuestas: 200 / 404."
+          }
+        },
+        {
+          "name": "Update device",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Comedor\",\n  \"type\": \"THERMOSTAT\",\n  \"location\": \"Comedor principal\",\n  \"userId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device/{{deviceId}}",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device", "{{deviceId}}"]
+            },
+            "description": "Sustituye (PUT) todos los datos del dispositivo. Respuestas: 200 / 400 / 404."
+          }
+        },
+        {
+          "name": "Delete device",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device/{{deviceId}}",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device", "{{deviceId}}"]
+            },
+            "description": "Elimina el dispositivo indicado. Respuestas: 204 / 404."
+          }
+        },
+        {
+          "name": "List devices by user id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{deviceBaseUrl}}/api/v1/device/user/{{userId}}?page=0&size=10",
+              "host": ["{{deviceBaseUrl}}"],
+              "path": ["api", "v1", "device", "user", "{{userId}}"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "Devuelve una página de los dispositivos pertenecientes al usuario indicado. Respuesta: PageResponse."
+          }
+        }
+      ]
+    }
+  ]
+}
