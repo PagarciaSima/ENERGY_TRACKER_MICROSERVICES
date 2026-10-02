@@ -61,8 +61,12 @@ public class GlobalExceptionHandler {
      * @return a {@code 404 Not Found} response containing the exception message
      */
     @ExceptionHandler(DeviceNotFoundException.class)
-    public ResponseEntity<String> handleNotFound(DeviceNotFoundException ex) {
+    public ResponseEntity<ErrorResponse> handleNotFound(DeviceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ex.getMessage());
+                .body(ErrorResponse.builder()
+                        .status(404)
+                        .error("Not Found")
+                        .message(ex.getMessage())
+                        .build());
     }
 }

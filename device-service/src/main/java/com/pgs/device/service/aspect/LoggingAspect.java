@@ -18,7 +18,7 @@ public class LoggingAspect {
 
     /**
      * Pointcut matching all methods of every class in the
-     * {@code com.pgs.user.service.service} package.
+     * {@code com.pgs.device.service.service} package.
      */
     @Pointcut("execution(* com.pgs.device.service.service.*.*(..))")
     public void serviceMethods() {

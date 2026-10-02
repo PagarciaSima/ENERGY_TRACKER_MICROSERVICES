@@ -25,6 +25,6 @@ public class ErrorResponse {
     private String error;
 
     /** Human-readable message describing the problem. */
-    @Schema(description = "Human-readable message describing the problem", example = "User not found")
+    @Schema(description = "Human-readable message describing the problem", example = "Device not found")
     private String message;
 }
