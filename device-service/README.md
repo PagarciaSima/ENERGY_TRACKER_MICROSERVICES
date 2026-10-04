@@ -327,12 +327,18 @@ The application runs with the `default` (dev) profile.
 
 ## 🧪 Testing
 
-The project currently ships a lightweight suite. It bootstraps the full Spring context and provides a disabled helper to seed sample data for local development.
+The project follows a layered testing strategy mirroring the user microservice: fast unit tests, Spring slice tests (web / JPA / cache), and a full E2E test with real MySQL and Redis via Testcontainers.
 
-| Test class                       | Type         | Scope                                    |
-| -------------------------------- | ------------ | ---------------------------------------- |
-| `DeviceServiceApplicationTests`  | Context load | Bootstraps the context (`@SpringBootTest`) |
-| `PopulateDB`                     | Dev seed     | `@Disabled`, inserts 200 sample devices (10 users) |
+| Test class                           | Type                     | Scope                                        |
+| ------------------------------------ | ------------------------ | -------------------------------------------- |
+| `DeviceServiceTest`                  | Unit (Mockito)           | Service logic, no Spring context             |
+| `DeviceServiceCacheTest`             | Cache (Spring)           | `@EnableCaching` + in-memory cache manager   |
+| `DeviceControllerTest`               | Web slice               | `@WebMvcTest` + MockMvc                      |
+| `GlobalExceptionHandlerTest`         | Web slice               | `@WebMvcTest` + MockMvc (error mapping)      |
+| `DeviceSpecificationTest`            | JPA slice               | `@DataJpaTest` + H2 (MySQL mode)             |
+| `DeviceServiceApplicationTests`      | Context load            | Bootstraps the context                       |
+| `DeviceServiceIntegrationTest`       | E2E (Testcontainers)    | Real MySQL + Redis + full application        |
+| `PopulateDB`                         | Dev seed (disabled)     | Inserts 200 sample devices for 10 users      |
 
 Run all tests:
 
@@ -340,9 +346,25 @@ Run all tests:
 mvn test
 ```
 
+Run only the fast unit tests (service logic, no Spring / infra):
+
+```bash
+mvn test -Dtest=DeviceServiceTest
+```
+
+Run the slice tests (web, JPA + H2, cache):
+
+```bash
+mvn test -Dtest=DeviceControllerTest,GlobalExceptionHandlerTest,DeviceSpecificationTest,DeviceServiceCacheTest
+```
+
+Run the E2E test (requires Docker to spin up real MySQL and Redis containers):
+
+```bash
+mvn test -Dtest=DeviceServiceIntegrationTest
+```
+
 > **Note:** `PopulateDB` is intended as a manual seeding utility. To run it, remove the `@Disabled` annotation (or run it from the IDE) against a local MySQL instance.
->
-> Testcontainers support (MySQL + Redis) and sliced unit/web/JPA tests are already configured in the `pom.xml`, ready to be added.
 
 ---
 
@@ -469,7 +491,6 @@ device-service
 
 ## 🗺️ Roadmap
 
-- [ ] Add the missing unit / web / JPA slice tests (Testcontainers support is already in the `pom.xml`).
 - [ ] Add a `CacheConfig` with `@EnableCaching` and a TTL to make the cache explicit (analogous to User Service).
 - [ ] Add a foreign key between `device.user_id` and the user table (or keep the microservice boundary and validate ownership).
 - [ ] Add graceful fallback to DB when Redis is temporarily unavailable.
