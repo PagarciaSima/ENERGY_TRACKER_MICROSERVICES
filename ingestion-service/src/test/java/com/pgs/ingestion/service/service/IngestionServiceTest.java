@@ -63,6 +63,7 @@ class IngestionServiceTest {
 	@DisplayName("ingestEnergyUsage")
 	class IngestEnergyUsage {
 
+		@SuppressWarnings("unchecked")
 		@Test
 		void publishesEventWithMappedFieldsToEnergyUsageTopic() {
 			when(kafkaTemplate.send(anyString(), any(EnergyUsageEvent.class)))
