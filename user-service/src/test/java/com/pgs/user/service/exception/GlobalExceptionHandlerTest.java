@@ -12,12 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.core.MethodParameter;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
-import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -53,7 +51,7 @@ class GlobalExceptionHandlerTest {
         }
 
         @GetMapping("/trigger/bad-request")
-        public void badRequest() {
+        public void badRequest() throws MethodArgumentNotValidException {
             throw validationException();
         }
 
@@ -63,9 +61,10 @@ class GlobalExceptionHandlerTest {
         }
 
         /**
-         * Builds a {@link MethodArgumentNotValidException} carrying a binding
-         * result with a single {@code email} field error, so the validation
-         * handler produces the expected message.
+         * Builds a {@link MethodArgumentNotValidException} (the exact type produced
+         * by {@code @Valid} on MVC request bodies) carrying a binding result with a
+         * single {@code email} field error, so the validation handler produces the
+         * expected message.
          */
         private static MethodArgumentNotValidException validationException() {
             Method method;
@@ -79,8 +78,7 @@ class GlobalExceptionHandlerTest {
                     new BeanPropertyBindingResult(TriggerController.class, "trigger");
             bindingResult.addError(new FieldError(
                     "trigger", "email", "", false, null, null, "must not be blank"));
-            Message<String> message = MessageBuilder.withPayload("").build();
-            return new MethodArgumentNotValidException(message, methodParameter, bindingResult);
+            return new MethodArgumentNotValidException(methodParameter, bindingResult);
         }
     }
 
