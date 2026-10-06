@@ -1,12 +1,13 @@
 {
   "info": {
-    "name": "ENERGY_TRACKER - User & Device Services",
-    "description": "Colección para probar los microservicios de usuario (puerto 8080) y dispositivo (puerto 8081) de la plataforma Home Energy Tracker. Los id en las rutas usan variables para poder reutilizarlas.",
+    "name": "ENERGY_TRACKER - User, Device & Ingestion Services",
+    "description": "Collection to test the user (port 8080), device (port 8081) and ingestion (port 8082) microservices of the Home Energy Tracker platform. Ids in the paths use variables so they can be reused.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "userBaseUrl", "value": "http://localhost:8080" },
     { "key": "deviceBaseUrl", "value": "http://localhost:8081" },
+    { "key": "ingestionBaseUrl", "value": "http://localhost:8082" },
     { "key": "userId", "value": "1" },
     { "key": "deviceId", "value": "1" }
   ],
@@ -30,7 +31,7 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user"]
             },
-            "description": "Crea un usuario (id auto-generado). Respuestas: 201 / 400 (validación) / 409 (email duplicado)."
+            "description": "Creates a user (auto-generated id). Responses: 201 / 400 (validation) / 409 (duplicate email)."
           }
         },
         {
@@ -42,7 +43,7 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user"]
             },
-            "description": "Devuelve todos los usuarios sin paginación. Respuesta: 200 (array de UserDto)."
+            "description": "Returns all users without pagination. Response: 200 (UserDto array)."
           }
         },
         {
@@ -55,11 +56,11 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user", "page"],
               "query": [
-                { "key": "page", "value": "0", "description": "Índice de página (base 0). Mín. 0." },
-                { "key": "size", "value": "10", "description": "Tamaño de página. Entre 1 y 100." }
+                { "key": "page", "value": "0", "description": "Page index (0-based). Min 0." },
+                { "key": "size", "value": "10", "description": "Page size. Between 1 and 100." }
               ]
             },
-            "description": "Devuelve una página de usuarios con envoltorio PageResponse."
+            "description": "Returns a page of users wrapped in a PageResponse."
           }
         },
         {
@@ -71,17 +72,17 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user", "search"],
               "query": [
-                { "key": "name", "value": "An", "description": "Fragmento de nombre (opcional)" },
-                { "key": "surname", "value": "Garc", "description": "Fragmento de apellido (opcional)" },
-                { "key": "email", "value": "", "description": "Fragmento de email (opcional)" },
-                { "key": "address", "value": "Madrid", "description": "Fragmento de dirección (opcional)" },
-                { "key": "alerting", "value": "true", "description": "Booleano de alerting (opcional)" },
-                { "key": "minEnergyAlertingThreshold", "value": "2500", "description": "Umbral mínimo (opcional)" },
+                { "key": "name", "value": "An", "description": "Name fragment (optional)" },
+                { "key": "surname", "value": "Garc", "description": "Surname fragment (optional)" },
+                { "key": "email", "value": "", "description": "Email fragment (optional)" },
+                { "key": "address", "value": "Madrid", "description": "Address fragment (optional)" },
+                { "key": "alerting", "value": "true", "description": "Alerting boolean (optional)" },
+                { "key": "minEnergyAlertingThreshold", "value": "2500", "description": "Minimum threshold (optional)" },
                 { "key": "page", "value": "0" },
                 { "key": "size", "value": "10" }
               ]
             },
-            "description": "Busca usuarios aplicando filtros opcionales. Respuesta: PageResponse."
+            "description": "Searches users applying optional filters. Response: PageResponse."
           }
         },
         {
@@ -93,7 +94,7 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user", "{{userId}}"]
             },
-            "description": "Devuelve el usuario por id. Respuestas: 200 / 404."
+            "description": "Returns the user by id. Responses: 200 / 404."
           }
         },
         {
@@ -112,7 +113,7 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user", "{{userId}}"]
             },
-            "description": "Sustituye (PUT) todos los datos del usuario indicado. Respuestas: 200 / 400 / 404."
+            "description": "Replaces (PUT) all the data of the specified user. Responses: 200 / 400 / 404."
           }
         },
         {
@@ -124,7 +125,7 @@
               "host": ["{{userBaseUrl}}"],
               "path": ["api", "v1", "user", "{{userId}}"]
             },
-            "description": "Elimina el usuario indicado. Respuestas: 204 (sin contenido) / 404."
+            "description": "Deletes the specified user. Responses: 204 (No Content) / 404."
           }
         }
       ]
@@ -148,7 +149,7 @@
               "host": ["{{deviceBaseUrl}}"],
               "path": ["api", "v1", "device"]
             },
-            "description": "Crea un dispositivo vinculado a un userId (id auto-generado). Tipos válidos: SPEAKER, CAMERA, THERMOSTAT, LIGHT, LOCK, DOORBELL. Respuestas: 201 / 400."
+            "description": "Creates a device linked to a userId (auto-generated id). Valid types: SPEAKER, CAMERA, THERMOSTAT, LIGHT, LOCK, DOORBELL. Responses: 201 / 400."
           }
         },
         {
@@ -164,7 +165,7 @@
                 { "key": "size", "value": "10" }
               ]
             },
-            "description": "Devuelve una página de todos los dispositivos. Respuesta: PageResponse."
+            "description": "Returns a page of all devices. Response: PageResponse."
           }
         },
         {
@@ -176,15 +177,15 @@
               "host": ["{{deviceBaseUrl}}"],
               "path": ["api", "v1", "device", "search"],
               "query": [
-                { "key": "name", "value": "Sal", "description": "Fragmento de nombre (opcional)" },
-                { "key": "type", "value": "LIGHT", "description": "Tipo exacto: SPEAKER/CAMERA/THERMOSTAT/LIGHT/LOCK/DOORBELL" },
-                { "key": "location", "value": "Madrid", "description": "Fragmento de ubicación (opcional)" },
-                { "key": "userId", "value": "1", "description": "Id del usuario propietario (opcional)" },
+                { "key": "name", "value": "Sal", "description": "Name fragment (optional)" },
+                { "key": "type", "value": "LIGHT", "description": "Exact type: SPEAKER/CAMERA/THERMOSTAT/LIGHT/LOCK/DOORBELL" },
+                { "key": "location", "value": "Madrid", "description": "Location fragment (optional)" },
+                { "key": "userId", "value": "1", "description": "Owner user id (optional)" },
                 { "key": "page", "value": "0" },
                 { "key": "size", "value": "10" }
               ]
             },
-            "description": "Busca dispositivos aplicando filtros opcionales. Respuesta: PageResponse."
+            "description": "Searches devices applying optional filters. Response: PageResponse."
           }
         },
         {
@@ -196,7 +197,7 @@
               "host": ["{{deviceBaseUrl}}"],
               "path": ["api", "v1", "device", "{{deviceId}}"]
             },
-            "description": "Devuelve el dispositivo por id. Respuestas: 200 / 404."
+            "description": "Returns the device by id. Responses: 200 / 404."
           }
         },
         {
@@ -215,7 +216,7 @@
               "host": ["{{deviceBaseUrl}}"],
               "path": ["api", "v1", "device", "{{deviceId}}"]
             },
-            "description": "Sustituye (PUT) todos los datos del dispositivo. Respuestas: 200 / 400 / 404."
+            "description": "Replaces (PUT) all the data of the device. Responses: 200 / 400 / 404."
           }
         },
         {
@@ -227,7 +228,7 @@
               "host": ["{{deviceBaseUrl}}"],
               "path": ["api", "v1", "device", "{{deviceId}}"]
             },
-            "description": "Elimina el dispositivo indicado. Respuestas: 204 / 404."
+            "description": "Deletes the specified device. Responses: 204 / 404."
           }
         },
         {
@@ -243,7 +244,31 @@
                 { "key": "size", "value": "10" }
               ]
             },
-            "description": "Devuelve una página de los dispositivos pertenecientes al usuario indicado. Respuesta: PageResponse."
+            "description": "Returns a page of the devices belonging to the specified user. Response: PageResponse."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingestion Service",
+      "item": [
+        {
+          "name": "Ingest energy usage",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": 42,\n  \"energyConsumed\": 3.5,\n  \"timestamp\": \"2026-10-04T15:30:45Z\"\n}"
+            },
+            "url": {
+              "raw": "{{ingestionBaseUrl}}/api/v1/ingestion",
+              "host": ["{{ingestionBaseUrl}}"],
+              "path": ["api", "v1", "ingestion"]
+            },
+            "description": "Publishes a single energy usage reading from an IoT device. The reading is validated, enriched with a timestamp if missing, and queued in Kafka for downstream processing. Responses: 201 (accepted) / 400 (validation) / 500 (internal error)."
           }
         }
       ]
