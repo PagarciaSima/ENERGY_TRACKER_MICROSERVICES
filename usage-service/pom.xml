@@ -81,6 +81,12 @@
 	        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 	        <version>3.1.1</version>
 	    </dependency>
+	    
+	     <!-- AOP (AspectJ): aspects para logging y medición de tiempos -->
+	    <dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-aspectj</artifactId>
+	    </dependency>
 	</dependencies>
 
 	<build>

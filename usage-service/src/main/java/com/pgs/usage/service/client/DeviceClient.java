@@ -1,4 +1,4 @@
-package com.pgs.client;
+package com.pgs.usage.service.client;
 
 import java.util.List;
 
@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.pgs.dto.DeviceDto;
+import com.pgs.usage.service.dto.DeviceDto;
 
 /**
  * HTTP client for communicating with the Device Service.

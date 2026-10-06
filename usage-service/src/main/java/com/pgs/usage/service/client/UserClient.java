@@ -1,4 +1,4 @@
-package com.pgs.client;
+package com.pgs.usage.service.client;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.pgs.dto.UserDto;
+import com.pgs.usage.service.dto.UserDto;
 
 /**
  * HTTP client for communicating with the User Service.

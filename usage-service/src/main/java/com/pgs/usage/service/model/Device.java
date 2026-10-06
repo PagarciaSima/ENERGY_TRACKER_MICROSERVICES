@@ -1,4 +1,4 @@
-package com.pgs.model;
+package com.pgs.usage.service.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

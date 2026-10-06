@@ -1,4 +1,4 @@
-package com.pgs.config;
+package com.pgs.usage.service.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

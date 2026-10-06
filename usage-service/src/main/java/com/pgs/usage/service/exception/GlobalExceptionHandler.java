@@ -1,4 +1,4 @@
-package com.pgs.exception;
+package com.pgs.usage.service.exception;
 
 import java.util.stream.Collectors;
 
@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
-import com.pgs.dto.ErrorResponse;
+import com.pgs.usage.service.dto.ErrorResponse;
 
 import jakarta.validation.ConstraintViolationException;
 

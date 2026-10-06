@@ -1,4 +1,4 @@
-package com.pgs.controller;
+package com.pgs.usage.service.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.pgs.dto.UsageDto;
+import com.pgs.usage.service.dto.UsageDto;
 import com.pgs.usage.service.service.UsageService;
 
 import io.swagger.v3.oas.annotations.Operation;

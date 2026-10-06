@@ -1,4 +1,4 @@
-package com.pgs.dto;
+package com.pgs.usage.service.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
