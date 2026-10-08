@@ -264,6 +264,39 @@ class UserServiceTest {
     }
 
     /* ------------------------------------------------------------------ */
+    /*  setAlertingEnabled                                                 */
+    /* ------------------------------------------------------------------ */
+
+    @Nested
+    @DisplayName("setAlertingEnabled")
+    class SetAlertingEnabled {
+
+        @Test
+        void whenExists_updatesOnlyAlertingFlag() {
+            User existing = existingUser(1L);
+            when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+            UserDto result = userService.setAlertingEnabled(1L, false);
+
+            assertThat(result.getId()).isEqualTo(1L);
+            assertThat(result.isAlerting()).isFalse();
+            assertThat(result.getName()).isEqualTo(NAME);
+
+            assertThat(existing.isAlerting()).isFalse();
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        void whenMissing_throwsNotFound() {
+            when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> userService.setAlertingEnabled(99L, true))
+                    .isInstanceOf(UserNotFoundException.class)
+                    .hasMessage("User not found with id: 99");
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
     /*  deleteUser                                                         */
     /* ------------------------------------------------------------------ */
 

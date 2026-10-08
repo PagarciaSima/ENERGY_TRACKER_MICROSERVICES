@@ -53,6 +53,8 @@ Publishing is **fire-and-forget**: `send` returns immediately once the message i
 | Spring Boot         | 4.1.1      | Application framework                     |
 | Spring WebMVC       | (SB)       | REST controller                          |
 | Spring for Kafka    | (SB)       | Kafka producer (`KafkaTemplate`)         |
+| AspectJ (Spring AOP)| (SB)       | Aspect-oriented logging / timing          |
+
 | Apache Kafka        | KRaft      | Message broker (local infra via docker)   |
 | jackson-datatype-jsr310 | —       | `Instant` / time API serialization        |
 | SpringDoc OpenAPI   | 3.1.1      | Swagger UI / API documentation            |
@@ -275,6 +277,9 @@ ingestion-service
 │   ├── main
 │   │   ├── java/com/pgs
 │   │   │   ├── ingestion/service
+│   │   │   │   ├── aspect
+│   │   │   │   │   ├── ExecutionTimeAspect.java
+│   │   │   │   │   └── LoggingAspect.java
 │   │   │   │   ├── IngestionServiceApplication.java
 │   │   │   │   ├── config
 │   │   │   │   │   └── OpenApiConfig.java

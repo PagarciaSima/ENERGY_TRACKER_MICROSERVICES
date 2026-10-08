@@ -145,6 +145,24 @@ public class UserService {
     }
 
     /**
+     * Enables or disables energy alerting for a user and evicts the cache entry.
+     *
+     * @param id      the user ID
+     * @param enabled whether alerting should be enabled
+     * @return the updated user as a DTO
+     * @throws UserNotFoundException if the user does not exist
+     */
+    @Transactional
+    @CacheEvict(value = CACHE_USERS, key = "#id")
+    public UserDto setAlertingEnabled(Long id, boolean enabled) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+        user.setAlerting(enabled);
+        log.debug("Updated alerting flag to {} for user id={}", enabled, id);
+        return toDto(user);
+    }
+
+    /**
      * Deletes a user by ID and evicts the cache entry.
      *
      * @param id the user ID

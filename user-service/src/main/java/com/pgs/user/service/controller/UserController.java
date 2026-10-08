@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -148,6 +149,26 @@ public class UserController {
 			@Valid @RequestBody UserDto userDto) {
 		return ResponseEntity.ok(userService.updateUser(id, userDto));
 	}
+
+	/*
+	 * ============================================================ PATCH - alerting
+	 * ============================================================
+	 */
+
+	@Operation(summary = "Enable or disable alerting for a user",
+			description = "Updates only the alerting flag of the user with the given id and returns the updated record.")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Alerting flag updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserDto.class))),
+			@ApiResponse(responseCode = "400", description = "Invalid request parameters", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "404", description = "User not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = @ExampleObject(name = "notFound", value = "{\"status\": 404, \"error\": \"Not Found\", \"message\": \"User not found with id: 99\"}"))),
+			@ApiResponse(responseCode = "500", description = "Internal Server Error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))) })
+	@PatchMapping("/{id}/alerting")
+	public ResponseEntity<UserDto> setAlertingEnabled(
+			@Parameter(description = "User id", example = "1") @PathVariable Long id,
+			@Parameter(description = "Whether energy alerting should be enabled", example = "true") @RequestParam boolean enabled) {
+		return ResponseEntity.ok(userService.setAlertingEnabled(id, enabled));
+	}
+
 
 	/*
 	 * ============================================================ DELETE

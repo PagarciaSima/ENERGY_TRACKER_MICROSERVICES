@@ -39,7 +39,7 @@ flowchart LR
 
     Service --> Cache[(Redis - users cache)]
     Service --> Repository[UserRepository]
-    Repository --> DB[(MySQL - home_energy_tracker)]
+    Repository --> DB[(MySQL - home_energy_tracker_user)]
 ```
 
 Cache interactions between the Service and Redis use Spring Cache — `@Cacheable` / `@CacheEvict` on the `users` cache.
@@ -82,6 +82,7 @@ All endpoints are under the base path `/api/v1/user`.
 | GET    | `/search`    | Search users with optional filters + pagination      | `200`, `400`, `500`      |
 | GET    | `/{id}`      | Get a user by id (cacheable)                         | `200`, `404`, `500`      |
 | PUT    | `/{id}`      | Update an existing user                              | `200`, `400`, `404`, `500` |
+| PATCH  | `/{id}/alerting`  | Enable / disable energy alerting                 | `200`, `400`, `404`, `500` |
 | DELETE | `/{id}`      | Delete a user by id                                  | `204`, `404`, `500`      |
 
 `GET /search` accepts the following optional query params: `name`, `surname`, `email`, `address` (case-insensitive fragments), `alerting` (boolean), `minEnergyAlertingThreshold` (number), plus pagination `page` (default `0`) and `size` (default `10`).
@@ -193,6 +194,30 @@ Content-Type: application/json
 }
 ```
 
+### Enable / disable alerting
+
+Enables or disables energy alerting for a user without touching the other fields (the threshold is preserved).
+
+```http
+PATCH /api/v1/user/1/alerting?enabled=false
+```
+
+**Response `200 OK`** — the full user is returned with the new `alerting` value:
+
+```json
+{
+  "id": 1,
+  "name": "Ana",
+  "surname": "García",
+  "email": "ana.garcia@example.com",
+  "address": "Calle Mayor 5, Madrid",
+  "alerting": false,
+  "energyAlertingThreshold": 3200.5
+}
+```
+
+**Response `404 Not Found`** if the user does not exist.
+
 ### Delete a user
 
 ```http
@@ -288,13 +313,21 @@ The schema is created and versioned by the Flyway migration `V1__user_table.sql`
    docker compose up -d
    ```
 
-2. Run the application:
+2. The user service connects to its own database `home_energy_tracker_user`, so create it first (connect to MySQL and run):
+
+   ```sql
+   CREATE DATABASE IF NOT EXISTS home_energy_tracker_user;
+   ```
+
+   > Flyway will create and version the schema tables automatically on startup.
+
+3. Run the application:
 
    ```bash
    mvn spring-boot:run
    ```
 
-3. The service will be available at `http://localhost:8080` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
+4. The service will be available at `http://localhost:8080` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
 
 ---
 
@@ -305,7 +338,7 @@ Configuration lives in `src/main/resources/application.properties`. Sensitive an
 | Property / Env var                         | Default value                                   | Description                     |
 | ------------------------------------------ | ----------------------------------------------- | ------------------------------- |
 | `SERVER_PORT` / `service.port`             | `8080`                                          | HTTP port of the service        |
-| `SPRING_DATASOURCE_URL`                    | `jdbc:mysql://localhost:3306/home_energy_tracker` | MySQL JDBC URL                  |
+| `SPRING_DATASOURCE_URL`                    | `jdbc:mysql://localhost:3306/home_energy_tracker_user` | MySQL JDBC URL                  |
 | `SPRING_DATASOURCE_USERNAME`               | `root`                                          | Database user                   |
 | `SPRING_DATASOURCE_PASSWORD`               | `admin`                                         | Database password               |
 | `SPRING_DATA_REDIS_HOST`                   | `localhost`                                     | Redis host                      |
@@ -429,7 +462,6 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 ```
 user-service
 ├── pom.xml
-├── docker-compose.yml
 ├── src
 │   ├── main
 │   │   ├── java/com/pgs/user/service
@@ -464,6 +496,8 @@ user-service
 │   │       └── db/migration/V1__user_table.sql
 │   └── test
 │       └── java/com/pgs/user/service
+│           ├── db
+│           │   └── PopulateDB.java
 │           ├── controller
 │           │   └── UserControllerTest.java
 │           ├── exception

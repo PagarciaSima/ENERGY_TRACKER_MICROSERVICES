@@ -483,8 +483,19 @@ device-service
 │   └── test
 │       └── java/com/pgs/device/service
 │           ├── DeviceServiceApplicationTests.java
-│           └── db
-│               └── PopulateDB.java
+│           ├── controller
+│           │   └── DeviceControllerTest.java
+│           ├── db
+│           │   └── PopulateDB.java
+│           ├── exception
+│           │   └── GlobalExceptionHandlerTest.java
+│           ├── integration
+│           │   └── DeviceServiceIntegrationTest.java
+│           ├── repository
+│           │   └── DeviceSpecificationTest.java
+│           └── service
+│               ├── DeviceServiceCacheTest.java
+│               └── DeviceServiceTest.java
 ```
 
 ---

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -244,6 +245,28 @@ class UserControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(1))
                     .andExpect(jsonPath("$.name").value(NAME));
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  PATCH /api/v1/user/{id}/alerting                                    */
+    /* ------------------------------------------------------------------ */
+
+    @Nested
+    @DisplayName("setAlertingEnabled")
+    class SetAlertingEnabled {
+
+        @Test
+        void whenEnabled_changesAlertingFlagAndReturnsUser() throws Exception {
+            when(userService.setAlertingEnabled(1L, false))
+                    .thenReturn(existingUserDto(1L));
+
+            mockMvc.perform(patch(BASE_URL + "/1/alerting")
+                            .param("enabled", "false"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1));
+
+            verify(userService).setAlertingEnabled(1L, false);
         }
     }
 
