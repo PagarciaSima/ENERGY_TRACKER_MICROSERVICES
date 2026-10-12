@@ -130,6 +130,17 @@ services:
       retries: 5
       start_period: 30s
 
+  # ============================================================
+  #  Mailpit (Servidor SMTP de pruebas y UI web)
+  # ============================================================
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # Interfaz Web (UI)
+      - "1025:1025"   # Puerto SMTP para recibir correos
+
 # ============================================================
 #  Volumes
 # ============================================================

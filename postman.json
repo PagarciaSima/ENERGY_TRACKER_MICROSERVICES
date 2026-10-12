@@ -1,13 +1,14 @@
 {
   "info": {
-    "name": "ENERGY_TRACKER - User, Device & Ingestion Services",
-    "description": "Collection to test the user (port 8080), device (port 8081) and ingestion (port 8082) microservices of the Home Energy Tracker platform. Ids in the paths use variables so they can be reused.",
+    "name": "ENERGY_TRACKER - User, Device, Ingestion & Usage Services",
+    "description": "Collection to test the microservices of the Home Energy Tracker platform: user (port 8080), device (port 8081), ingestion (port 8082) and usage (port 8083). Ids in the paths use variables so they can be reused.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "userBaseUrl", "value": "http://localhost:8080" },
     { "key": "deviceBaseUrl", "value": "http://localhost:8081" },
     { "key": "ingestionBaseUrl", "value": "http://localhost:8082" },
+    { "key": "usageBaseUrl", "value": "http://localhost:8083" },
     { "key": "userId", "value": "1" },
     { "key": "deviceId", "value": "1" }
   ],
@@ -114,6 +115,21 @@
               "path": ["api", "v1", "user", "{{userId}}"]
             },
             "description": "Replaces (PUT) all the data of the specified user. Responses: 200 / 400 / 404."
+          }
+        },
+        {
+          "name": "Enable/disable alerting",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{userBaseUrl}}/api/v1/user/{{userId}}/alerting?enabled=false",
+              "host": ["{{userBaseUrl}}"],
+              "path": ["api", "v1", "user", "{{userId}}", "alerting"],
+              "query": [
+                { "key": "enabled", "value": "false", "description": "Whether energy alerting should be enabled (true) or disabled (false)" }
+              ]
+            },
+            "description": "Enables or disables energy alerting for a user (only changes the alerting flag; the threshold is preserved). Responses: 200 / 400 / 404."
           }
         },
         {
@@ -269,6 +285,26 @@
               "path": ["api", "v1", "ingestion"]
             },
             "description": "Publishes a single energy usage reading from an IoT device. The reading is validated, enriched with a timestamp if missing, and queued in Kafka for downstream processing. Responses: 201 (accepted) / 400 (validation) / 500 (internal error)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usage Service",
+      "item": [
+        {
+          "name": "Get usage by user",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{usageBaseUrl}}/api/v1/usage/{{userId}}?days=3",
+              "host": ["{{usageBaseUrl}}"],
+              "path": ["api", "v1", "usage", "{{userId}}"],
+              "query": [
+                { "key": "days", "value": "3", "description": "Number of days to aggregate (1..365, default 3)" }
+              ]
+            },
+            "description": "Returns aggregated energy usage of the user devices over the last N days. Responses: 200 / 400."
           }
         }
       ]
