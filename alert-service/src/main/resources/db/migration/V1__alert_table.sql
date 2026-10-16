@@ -1,3 +1,4 @@
+-- Initial alert history table. Expandido por V2 con el contenido y los índices.
 CREATE TABLE `alert` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT,

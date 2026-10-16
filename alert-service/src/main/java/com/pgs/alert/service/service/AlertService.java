@@ -19,6 +19,10 @@ import lombok.extern.slf4j.Slf4j;
  * it only reacts to alert events and forwards them to the notification channel.
  * This separation allows the notification channel (email, push, SMS, etc.) to
  * evolve independently from the alert detection logic.
+ * <p>
+ * The consumer factory is customized in {@code KafkaConfig} with a retryable
+ * error handler that, after a configured number of attempts, delegates to a
+ * dead-letter topic so that undeliverable events are not silently lost.
  */
 @Slf4j
 @Service
@@ -31,28 +35,26 @@ public class AlertService {
      * Kafka listener that consumes {@link AlertingEvent} messages from the
      * {@code energy-alerts} topic.
      * <p>
-     * For each alert, it builds a human-readable subject and body, and delegates
-     * the actual delivery to {@link EmailService#sendEmail(String, String, String, Long)}.
+     * Events missing mandatory fields (user id, email) are ignored with a warning;
+     * well-formed events are forwarded to {@link EmailService#sendEmail(AlertingEvent)}
+     * which builds and sends the notification.
      *
      * @param alertingEvent the alert event containing the user id, the email
      *                      address, the threshold and the aggregated consumption
      *                      that triggered the alert
      */
-    @KafkaListener(topics = "energy-alerts", groupId = "alert-service")
+    @KafkaListener(topics = "${app.kafka.alerts.topic}",
+            groupId = "${spring.kafka.consumer.group-id:alert-service}")
     public void energyUsageAlertEvent(AlertingEvent alertingEvent) {
         log.info("Received alert event: {}", alertingEvent);
 
-        // send email alert
-        final String subject = "Energy Usage Alert for User "
-                + alertingEvent.getUserId();
+        if (alertingEvent == null
+                || alertingEvent.getUserId() == null
+                || alertingEvent.getEmail() == null) {
+            log.warn("Ignoring alert event with missing mandatory fields");
+            return;
+        }
 
-        final String message = "Alert: " + alertingEvent.getMessage() +
-                "\nThreshold: " + alertingEvent.getThreshold() +
-                "\nEnergy Consumed: " + alertingEvent.getEnergyConsumed();
-
-        emailService.sendEmail(alertingEvent.getEmail(),
-                subject,
-                message,
-                alertingEvent.getUserId());
+        emailService.sendEmail(alertingEvent);
     }
 }

@@ -24,6 +24,10 @@ public class Alert {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Long userId;
+    private String message;
+    private Double threshold;
+    private Double energyConsumed;
+    private String email;
     private Instant createdAt;
     private boolean sent;
 }

@@ -104,6 +104,13 @@
 	        <groupId>org.springframework.boot</groupId>
 	        <artifactId>spring-boot-starter-aspectj</artifactId>
 	    </dependency>
+
+	    <!-- H2 in-memory database for tests (no external MySQL required) -->
+	    <dependency>
+	        <groupId>com.h2database</groupId>
+	        <artifactId>h2</artifactId>
+	        <scope>test</scope>
+	    </dependency>
 	</dependencies>
 
 	<build>
