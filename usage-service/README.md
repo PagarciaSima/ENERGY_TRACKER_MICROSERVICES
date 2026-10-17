@@ -66,7 +66,7 @@ Readings persist as InfluxDB points in the `energy_usage` measurement. Aggregate
 | InfluxDB              | 2.7        | Time-series storage of energy readings    |
 | influxdb-client-java  | 6.12.0     | Write / query InfluxDB (Flux)             |
 | AspectJ (Spring AOP)  | (SB)       | Aspect-oriented logging / timing          |
-| RestTemplate          | (SB)       | HTTP clients to Device / User services    |
+| RestClient            | (SB)       | HTTP clients to Device / User services    |
 | jackson-datatype-jsr310 | —        | `Instant` / time API serialization        |
 | SpringDoc OpenAPI     | 3.1.1      | Swagger UI / API documentation            |
 | Lombok                | 1.18.36    | Boilerplate reduction                     |

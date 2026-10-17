@@ -9,11 +9,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import com.pgs.ingestion.service.dto.EnergyUsageDto;
 
@@ -24,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class ParallelDataSimulator implements CommandLineRunner {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestClient restClient = RestClient.create();
     private final Random random = new Random();
 
     @Value("${simulation.parallel-threads}")
@@ -48,7 +47,7 @@ public class ParallelDataSimulator implements CommandLineRunner {
         ((ThreadPoolExecutor)executorService).setCorePoolSize(parallelThreads);
     }
 
-    //@Scheduled(fixedRateString = "${simulation.interval-ms}")
+    @Scheduled(fixedRateString = "${simulation.interval-ms}")
     public void sendMockData() {
         int batchSize = requestsPerInterval / parallelThreads;
         int remainder = requestsPerInterval % parallelThreads;
@@ -64,10 +63,12 @@ public class ParallelDataSimulator implements CommandLineRunner {
                                     .atZone(ZoneId.systemDefault()).toInstant())
                             .build();
                     try {
-                        HttpHeaders headers = new HttpHeaders();
-                        headers.setContentType(MediaType.APPLICATION_JSON);
-                        HttpEntity<EnergyUsageDto> request = new HttpEntity<>(dto, headers);
-                        restTemplate.postForEntity(ingestionEndpoint, request, Void.class);
+                        restClient.post()
+                                .uri(ingestionEndpoint)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .body(dto)
+                                .retrieve()
+                                .toBodilessEntity();
                         log.info("Sent mock data: " + dto);
                     } catch (Exception e) {
                         log.error("Failed to send data: " + e.getMessage());

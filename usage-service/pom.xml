@@ -39,6 +39,15 @@
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
+		<!-- RestClient: cliente HTTP moderno para las llamadas a los
+		     microservicios device-service y user-service. Sustituye al
+		     RestTemplate (enfoque antiguo). Proporciona el bean
+		     RestClient.Builder auto-configurado. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-restclient</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>

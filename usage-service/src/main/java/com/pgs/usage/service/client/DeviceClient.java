@@ -2,11 +2,10 @@ package com.pgs.usage.service.client;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.client.RestClient;
 
 import com.pgs.usage.service.dto.DeviceDto;
 
@@ -17,27 +16,26 @@ import com.pgs.usage.service.dto.DeviceDto;
  * and the {@code device-service}, hiding the details of the HTTP communication
  * (URL building, serialization, status handling) from the business logic.
  * <p>
- * The base URL of the Device Service is read from the {@code device.service.url}
- * property, which allows different values per environment (local, Docker,
- * production).
+ * It is backed by a {@link RestClient} bean (see
+ * {@link com.pgs.usage.service.config.RestClientConfig}) whose base URL comes
+ * from the {@code device.service.url} property, which allows different values
+ * per environment (local, Docker, production).
  */
 @Component
 public class DeviceClient {
 
-    private final RestTemplate restTemplate;
-
-    private final String baseUrl;
+    private final RestClient restClient;
 
     /**
      * Creates a new {@code DeviceClient}.
      *
-     * @param baseUrl the base URL of the Device Service, injected from the
-     *                {@code device.service.url} property (for example,
-     *                {@code http://localhost:8081} or {@code http://device-service:8081})
+     * @param restClient the {@code RestClient} pre-configured with the Device
+     *                   Service base URL ({@code device.service.url}), for
+     *                   example {@code http://localhost:8081/api/v1/device} or
+     *                   {@code http://device-service:8081/api/v1/device}
      */
-    public DeviceClient(@Value("${device.service.url}") String baseUrl) {
-        this.restTemplate = new RestTemplate();
-        this.baseUrl = baseUrl;
+    public DeviceClient(@Qualifier("deviceRestClient") RestClient restClient) {
+        this.restClient = restClient;
     }
 
     /**
@@ -55,14 +53,10 @@ public class DeviceClient {
      *         Device Service returns a 4xx response (for example, 404 Not Found)
      */
     public DeviceDto getDeviceById(Long deviceId) {
-        String url = UriComponentsBuilder
-                .fromUriString(baseUrl)
-                .path("/{deviceId}")
-                .buildAndExpand(deviceId)
-                .toUriString();
-
-        ResponseEntity<DeviceDto> response = restTemplate.getForEntity(url, DeviceDto.class);
-        return response.getBody();
+        return restClient.get()
+                .uri("/{deviceId}", deviceId)
+                .retrieve()
+                .body(DeviceDto.class);
     }
 
     /**
@@ -84,14 +78,11 @@ public class DeviceClient {
      *         Device Service returns a 4xx response
      */
     public List<DeviceDto> getAllDevicesForUser(Long userId) {
-        String url = UriComponentsBuilder
-                .fromUriString(baseUrl)
-                .path("/user/{userId}")
-                .buildAndExpand(userId)
-                .toUriString();
-
-        ResponseEntity<DeviceDto[]> response = restTemplate.getForEntity(url, DeviceDto[].class);
-        DeviceDto[] devices = response.getBody();
-        return devices == null ? List.of() : List.of(devices);
+        List<DeviceDto> devices = restClient.get()
+                .uri("/user/{userId}", userId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<DeviceDto>>() {
+                });
+        return devices == null ? List.of() : devices;
     }
 }

@@ -1,10 +1,8 @@
 package com.pgs.usage.service.client;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.client.RestClient;
 
 import com.pgs.usage.service.dto.UserDto;
 
@@ -15,27 +13,26 @@ import com.pgs.usage.service.dto.UserDto;
  * and the {@code user-service}, hiding the details of the HTTP communication
  * (URL building, serialization, status handling) from the business logic.
  * <p>
- * The base URL of the User Service is read from the {@code user.service.url}
- * property, which allows different values per environment (local, Docker,
- * production).
+ * It is backed by a {@link RestClient} bean (see
+ * {@link com.pgs.usage.service.config.RestClientConfig}) whose base URL comes
+ * from the {@code user.service.url} property, which allows different values
+ * per environment (local, Docker, production).
  */
 @Component
 public class UserClient {
 
-    private final RestTemplate restTemplate;
-
-    private final String baseUrl;
+    private final RestClient restClient;
 
     /**
      * Creates a new {@code UserClient}.
      *
-     * @param baseUrl the base URL of the User Service, injected from the
-     *                {@code user.service.url} property (for example,
-     *                {@code http://localhost:8080} or {@code http://user-service:8080})
+     * @param restClient the {@code RestClient} pre-configured with the User
+     *                   Service base URL ({@code user.service.url}), for
+     *                   example {@code http://localhost:8080/api/v1/user} or
+     *                   {@code http://user-service:8080/api/v1/user}
      */
-    public UserClient(@Value("${user.service.url}") String baseUrl) {
-        this.restTemplate = new RestTemplate();
-        this.baseUrl = baseUrl;
+    public UserClient(@Qualifier("userRestClient") RestClient restClient) {
+        this.restClient = restClient;
     }
 
     /**
@@ -53,13 +50,9 @@ public class UserClient {
      *         User Service returns a 4xx response (for example, 404 Not Found)
      */
     public UserDto getUserById(Long userId) {
-        String url = UriComponentsBuilder
-                .fromUriString(baseUrl)
-                .path("/{userId}")
-                .buildAndExpand(userId)
-                .toUriString();
-
-        ResponseEntity<UserDto> response = restTemplate.getForEntity(url, UserDto.class);
-        return response.getBody();
+        return restClient.get()
+                .uri("/{userId}", userId)
+                .retrieve()
+                .body(UserDto.class);
     }
 }
