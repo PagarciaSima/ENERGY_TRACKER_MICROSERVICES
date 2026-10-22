@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import lombok.RequiredArgsConstructor;
 
 /**
  * REST controller that exposes endpoints to query aggregated energy usage.
@@ -33,18 +34,10 @@ import jakarta.validation.constraints.Positive;
 @RestController
 @RequestMapping("/api/v1/usage")
 @Validated
+@RequiredArgsConstructor
 public class UsageController {
 
     private final UsageService usageService;
-
-    /**
-     * Constructs a new {@code UsageController} with the given {@link UsageService}.
-     *
-     * @param usageService the service used to retrieve usage data
-     */
-    public UsageController(UsageService usageService) {
-        this.usageService = usageService;
-    }
 
     /**
      * Retrieves the aggregated energy usage for a specific user over the last {@code days} days.

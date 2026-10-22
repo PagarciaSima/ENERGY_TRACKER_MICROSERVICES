@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "ENERGY_TRACKER - User, Device, Ingestion & Usage Services",
-    "description": "Collection to test the microservices of the Home Energy Tracker platform: user (port 8080), device (port 8081), ingestion (port 8082) and usage (port 8083). Ids in the paths use variables so they can be reused.",
+    "name": "ENERGY_TRACKER - User, Device, Ingestion, Usage & Insight Services",
+    "description": "Collection to test the microservices of the Home Energy Tracker platform: user (port 8080), device (port 8081), ingestion (port 8082), usage (port 8083) and insight (port 8085). The alert-service (port 8084) does not expose REST endpoints (it consumes Kafka events). Ids in the paths use variables so they can be reused.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -9,6 +9,7 @@
     { "key": "deviceBaseUrl", "value": "http://localhost:8081" },
     { "key": "ingestionBaseUrl", "value": "http://localhost:8082" },
     { "key": "usageBaseUrl", "value": "http://localhost:8083" },
+    { "key": "insightBaseUrl", "value": "http://localhost:8085" },
     { "key": "userId", "value": "1" },
     { "key": "deviceId", "value": "1" }
   ],
@@ -305,6 +306,35 @@
               ]
             },
             "description": "Returns aggregated energy usage of the user devices over the last N days. Responses: 200 / 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Insight Service",
+      "item": [
+        {
+          "name": "Get saving tips",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{insightBaseUrl}}/api/v1/insight/saving-tips/{{userId}}",
+              "host": ["{{insightBaseUrl}}"],
+              "path": ["api", "v1", "insight", "saving-tips", "{{userId}}"]
+            },
+            "description": "Aggregates the last 3 days of energy usage of the user devices and asks the chat model for personalized energy-saving tips. Responses: 200 (InsightDto: userId, tips, energyUsage) / 400 (invalid userId) / 500. Requires usage-service to be reachable."
+          }
+        },
+        {
+          "name": "Get overview",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{insightBaseUrl}}/api/v1/insight/overview/{{userId}}",
+              "host": ["{{insightBaseUrl}}"],
+              "path": ["api", "v1", "insight", "overview", "{{userId}}"]
+            },
+            "description": "Aggregates the last 3 days of energy usage of the user devices and asks the chat model for a concise analysis with actionable insights. Responses: 200 (InsightDto: userId, tips, energyUsage) / 400 (invalid userId) / 500. Requires usage-service to be reachable."
           }
         }
       ]

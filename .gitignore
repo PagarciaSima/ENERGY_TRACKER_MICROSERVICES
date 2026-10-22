@@ -43,4 +43,5 @@ logs/
 ### Maven & Gradle ###
 .mvn/
 .gradle/
-docker/influxdb_data/
+docker/influxdb_data
+docker/influxdb_data/influxd.bolt
