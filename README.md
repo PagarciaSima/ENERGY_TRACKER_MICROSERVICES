@@ -88,14 +88,14 @@ flowchart TB
 
     %% Ingestion Pipeline
     IngestionSvc -->|Publish Event| TopicUsage
-    TopicUsage -->|@KafkaListener| UsageSvc
+    TopicUsage -->|"@KafkaListener"| UsageSvc
     UsageSvc -->|Flux write API| InfluxTSDB
 
     %% Alerting Pipeline
     UsageSvc -.->|GET /api/v1/device/user/:id| DeviceSvc
     UsageSvc -.->|GET /api/v1/user/:id| UserSvc
     UsageSvc -->|Publish AlertingEvent| TopicAlerts
-    TopicAlerts -->|@KafkaListener| AlertSvc
+    TopicAlerts -->|"@KafkaListener"| AlertSvc
     AlertSvc -->|SMTP JavaMailSender| MailpitSMTP
     AlertSvc -.->|Exhausted Retries| TopicDLT
 

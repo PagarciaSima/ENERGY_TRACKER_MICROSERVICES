@@ -40,9 +40,9 @@ flowchart LR
     RepoDev(Device Service :8081)
     RepoUsr(User Service :8080)
 
-    TopicUsg -->|@KafkaListener| Svc[UsageService]
+    TopicUsg -->|"@KafkaListener"| Svc[UsageService]
     Svc -->|write API| UsgDB
-    Svc -->|@Scheduled| Svc
+    Svc -->|"@Scheduled"| Svc
     Svc -->|get devices| RepoDev
     Svc -->|get user + alerting| RepoUsr
     Svc -->|AlertingEvent| TopicAlr

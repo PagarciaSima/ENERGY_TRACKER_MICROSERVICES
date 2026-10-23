@@ -33,7 +33,7 @@ The service is a **reactive, event-driven microservice**: instead of exposing RE
 ```mermaid
 flowchart LR
     Usage[Usage Service] -->|AlertingEvent| Kafka[(Kafka - energy-alerts)]
-    Kafka --> Listener[AlertService @KafkaListener]
+    Kafka --> Listener["AlertService @KafkaListener"]
     Listener --> Email[EmailService]
     Email --> SMTP[(SMTP - Mailpit)]
     Email --> DB[(MySQL - alert history)]
