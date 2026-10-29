@@ -1,6 +1,6 @@
 # 🔔 Alert Service
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that sends notifications for the **Energy Tracker** home energy tracking platform.
 
@@ -88,6 +88,9 @@ flowchart LR
 2. `AlertService.energyUsageAlertEvent` consumes the event from `energy-alerts`.
 3. `EmailService` sends the email and stores an `Alert` row with `sent = true/false`.
 
+![Mailpit inbox with the alert emails](../img/mailpit.png)
+*Mailpit → **Inbox**: one "Energy Usage Alert for User N" email per breach, showing the configured threshold and the measured consumption.*
+
 ---
 
 ## 📦 Kafka topics
@@ -98,6 +101,9 @@ flowchart LR
 | `energy-alerts-dlt`| producer   | Dead-letter topic for events that exhausted their retries |
 
 Topic names are centralized in `application.properties` (`app.kafka.alerts.topic` / `app.kafka.alerts.dlt-topic`) instead of being hard-coded.
+
+![Kafka UI — energy-alerts topic](../img/kafka-ui.png)
+*Kafbat UI → **Topics → `energy-alerts`**: the `AlertingEvent` payloads this service consumes (`userId`, `message`, `threshold`, `energyConsumed`, `email`).*
 
 ---
 
@@ -162,6 +168,26 @@ docker exec -i kafka /opt/kafka/bin/kafka-console-producer.sh \
 
 Paste a JSON event and press Enter; the email appears in the **Mailpit** UI at `http://localhost:8025`.
 
+### Running as a container
+
+This service ships a `Dockerfile` (multi-stage build, non-root user, `HEALTHCHECK` on `/actuator/health`) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: infrastructure + all seven microservices
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure must already be running)
+docker compose --env-file .env.docker up -d --build alert-service
+```
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9094` (external listener) | `kafka:9092` (internal listener) |
+| `MYSQL_URL` | `jdbc:mysql://localhost:3306/home_energy_tracker_alert` | `jdbc:mysql://mysql:3306/home_energy_tracker_alert` |
+| `SPRING_MAIL_HOST` | `localhost` | `mailpit` |
+
+> The container waits for Kafka and MySQL to report healthy before starting. The service exposes no REST endpoints, but its `/actuator/health` is still used as the container health check.
+
 ---
 
 ## ⚙️ Configuration
@@ -218,7 +244,8 @@ Every meter is tagged with `application=alert-service` (`management.metrics.tags
 
 ```bash
 cd alert-service
-./mvnw test
+./mvnw test          # macOS/Linux
+.\mvnw.cmd test      # Windows
 ```
 
 The suite runs **without external infrastructure** (no Docker/MySQL/Kafka required):
@@ -229,6 +256,8 @@ The suite runs **without external infrastructure** (no Docker/MySQL/Kafka requir
 | `EmailServiceTest`          | Unit        | Email sent / persisted with `sent=true`, and `sent=false` on failure |
 | `AlertKafkaIntegrationTest` | Integration | Full chain over an embedded Kafka broker: consume → email → persist  |
 
+Current status: **8 tests, 0 failures**.
+
 - The integration test uses `@EmbeddedKafka` (broker address auto-registered in `spring.kafka.bootstrap-servers`) and `@MockitoBean` for `JavaMailSender` and `AlertRepository`.
 - `src/test/resources/application.properties` swaps MySQL for H2 and disables Flyway.
 
@@ -238,6 +267,10 @@ The suite runs **without external infrastructure** (no Docker/MySQL/Kafka requir
 
 ```
 alert-service
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main

@@ -1,5 +1,6 @@
 package com.pgs.api.gateway.route;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
 import org.springframework.context.annotation.Bean;
@@ -29,13 +30,14 @@ public class DeviceServiceRoutes {
      * Routes {@code /api/v1/device/**} to the Device Service, guarded by a circuit
      * breaker that forwards to the fallback route when the circuit is open.
      *
+     * @param baseUri base URI of the Device Service, injected from {@code device.service.uri}
      * @return the device service router function
      */
     @Bean
-    RouterFunction<ServerResponse> deviceRoute() {
+    RouterFunction<ServerResponse> deviceRoute(@Value("${device.service.uri}") String baseUri) {
         return route("device-service")
                 .route(RequestPredicates.path("/api/v1/device/**"), http())
-                .before(uri("http://localhost:8081"))
+                .before(uri(baseUri))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "deviceServiceCircuitBreaker",
                         URI.create("forward:/fallbackRoute/device")))

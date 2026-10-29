@@ -1,6 +1,6 @@
 # 📈 Usage Service
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that aggregates, stores and alerts on the energy usage of the **Energy Tracker** home energy tracking platform.
 
@@ -154,6 +154,9 @@ This service has **no relational database**. Its data lives in two places:
 | `energyConsumed`   | field   | Energy consumed (kWh)                    |
 | `time`             | time    | Timestamp of the reading (ms precision)  |
 
+![InfluxDB Data Explorer — usage-bucket](../img/influxdb.png)
+*InfluxDB → **Data Explorer**: the `usage-bucket` queried by `deviceId` (tag) and `energyConsumed` (field) — the same shape this service writes for every consumed `EnergyUsageEvent`.*
+
 ### Kafka events
 
 | Topic            | Payload          | Direction |
@@ -193,6 +196,27 @@ InfluxDB is initialised on first run with:
 - Org: `home-energy-tracker`
 - Bucket: `usage-bucket`
 - Admin token: `my-token`
+
+### Running as a container
+
+This service ships a `Dockerfile` (multi-stage build, non-root user, `HEALTHCHECK` on `/actuator/health`) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: infrastructure + all seven microservices
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure must already be running)
+docker compose --env-file .env.docker up -d --build usage-service
+```
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9094` (external listener) | `kafka:9092` (internal listener) |
+| `INFLUX_URL` | `http://localhost:8072` (published host port) | `http://influxdb:8086` (container port) |
+| `DEVICE_SERVICE_URL` | `http://localhost:8081/api/v1/device` | `http://device-service:8081/api/v1/device` |
+| `USER_SERVICE_URL` | `http://localhost:8080/api/v1/user` | `http://user-service:8080/api/v1/user` |
+
+> The container waits for Kafka, InfluxDB, the Device Service and the User Service to report healthy before starting, so the first aggregation does not race the dependencies.
 
 ### Running locally
 
@@ -277,6 +301,8 @@ cd usage-service
 | `UserClientTest`                 | Unit        | `UserClient` maps user responses / handles errors      |
 | `UsageServiceTest`               | Unit (Mockito) | Aggregation query, threshold evaluation, deleted users (`404`), per-user alert cooldown and the Kafka listener write path |
 
+Current status: **27 tests, 0 failures** (none of them needs Docker, Kafka or InfluxDB).
+
 > The scheduled aggregation, the threshold checks, the alert cooldown and the Kafka listener are covered by `UsageServiceTest` with mocked collaborators (a controllable `Clock` drives the cooldown tests). A `WebMvcTest` for `UsageController` and a full E2E test with real Kafka + InfluxDB are still pending — see the [Roadmap](#-roadmap).
 
 ---
@@ -300,6 +326,10 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 
 ```
 usage-service
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main

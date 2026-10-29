@@ -1,0 +1,77 @@
+# ============================================================
+#  Prometheus — scrape configuration for the DOCKERIZED stack
+# ============================================================
+# Used when the seven microservices run as containers (Compose profile `app`):
+# every target is reached through its Compose service name instead of the host.
+# Activate it with PROMETHEUS_CONFIG_FILE=prometheus.docker.yml (see .env.docker);
+# the default prometheus.yml keeps scraping services running on the host.
+# Each Spring Boot service exposes Micrometer metrics on /actuator/prometheus.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: home-energy-tracker
+    env: docker
+
+scrape_configs:
+  # ---- Prometheus itself (self-monitoring) ----
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ---- API Gateway ----
+  - job_name: api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['api-gateway:9000']
+        labels:
+          application: api-gateway
+
+  # ---- User Service ----
+  - job_name: user-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['user-service:8080']
+        labels:
+          application: user-service
+
+  # ---- Device Service ----
+  - job_name: device-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['device-service:8081']
+        labels:
+          application: device-service
+
+  # ---- Ingestion Service ----
+  - job_name: ingestion-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['ingestion-service:8082']
+        labels:
+          application: ingestion-service
+
+  # ---- Usage Service ----
+  - job_name: usage-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['usage-service:8083']
+        labels:
+          application: usage-service
+
+  # ---- Alert Service ----
+  - job_name: alert-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['alert-service:8084']
+        labels:
+          application: alert-service
+
+  # ---- Insight Service ----
+  - job_name: insight-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['insight-service:8085']
+        labels:
+          application: insight-service

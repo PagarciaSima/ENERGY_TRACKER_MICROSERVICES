@@ -1,6 +1,6 @@
 # ⚡ User Service
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that manages the users of the **Energy Tracker** home energy tracking platform.
 
@@ -77,6 +77,9 @@ Cache interactions between the Service and Redis use Spring Cache — `@Cacheabl
 All endpoints are under the base path `/api/v1/user`.
 
 > Interactive docs available at [Swagger UI](http://localhost:8080/swagger-ui.html) (OpenAPI spec at [`/v3/api-docs`](http://localhost:8080/v3/api-docs), group `users`).
+
+![Swagger UI of the User Service](../img/openapi.png)
+*SpringDoc UI listing every endpoint of the service (group `users`), generated from the `@Operation` / `@ApiResponses` annotations.*
 
 | Method | Path         | Description                                          | Status codes             |
 | ------ | ------------ | ---------------------------------------------------- | ------------------------ |
@@ -309,6 +312,25 @@ The schema is created and versioned by the Flyway migration `V1__user_table.sql`
 - **Maven** 3.9+
 - **Docker** (with Docker Compose) for MySQL and Redis
 
+### Running as a container
+
+This service ships a `Dockerfile` (multi-stage build, non-root user, `HEALTHCHECK` on `/actuator/health`) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: infrastructure + all seven microservices
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure must already be running)
+docker compose --env-file .env.docker up -d --build user-service
+```
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `MYSQL_URL` | `jdbc:mysql://localhost:3306/home_energy_tracker_user` | `jdbc:mysql://mysql:3306/home_energy_tracker_user` |
+| `REDIS_HOST` | `localhost` | `redis` |
+
+> The container waits for MySQL and Redis to report healthy (`depends_on: condition: service_healthy`) and Flyway runs the migrations on startup.
+
 ### Running locally
 
 1. Start the infrastructure (MySQL + Redis) with Docker Compose:
@@ -392,28 +414,32 @@ The project follows a layered testing strategy: fast unit tests, Spring slice te
 | `UserServiceApplicationTests`       | Context load             | Bootstraps the context                       |
 | `UserServiceIntegrationTest`        | E2E (Testcontainers)    | Real MySQL + Redis + full application        |
 
+Current status: **56 tests, 0 failures** (the E2E class spins up MySQL and Redis with Testcontainers, so Docker must be running).
+
 Run all tests:
 
 ```bash
-mvn test
+cd user-service
+./mvnw test          # macOS/Linux
+.\mvnw.cmd test      # Windows
 ```
 
 Run only the fast unit tests (service logic, no Spring / infra):
 
 ```bash
-mvn test -Dtest=UserServiceTest
+.\mvnw.cmd test -Dtest=UserServiceTest
 ```
 
 Run the slice tests (web, JPA + H2, cache):
 
 ```bash
-mvn test -Dtest=UserControllerTest,GlobalExceptionHandlerTest,UserSpecificationTest,UserServiceCacheTest
+.\mvnw.cmd test -Dtest=UserControllerTest,GlobalExceptionHandlerTest,UserSpecificationTest,UserServiceCacheTest
 ```
 
 Run the E2E test (requires Docker to spin up real MySQL and Redis containers):
 
 ```bash
-mvn test -Dtest=UserServiceIntegrationTest
+.\mvnw.cmd test -Dtest=UserServiceIntegrationTest
 ```
 ---
 
@@ -487,6 +513,10 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 
 ```
 user-service
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main

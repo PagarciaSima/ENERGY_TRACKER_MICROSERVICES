@@ -7,6 +7,7 @@ import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFuncti
 
 import java.net.URI;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
 import org.springframework.context.annotation.Bean;
@@ -29,13 +30,14 @@ public class UserServiceRoutes {
      * Routes {@code /api/v1/user/**} to the User Service, guarded by a circuit
      * breaker that forwards to the fallback route when the circuit is open.
      *
+     * @param baseUri base URI of the User Service, injected from {@code user.service.uri}
      * @return the user service router function
      */
     @Bean
-    RouterFunction<ServerResponse> userRoute() {
+    RouterFunction<ServerResponse> userRoute(@Value("${user.service.uri}") String baseUri) {
         return route("user-service")
                 .route(RequestPredicates.path("/api/v1/user/**"), http())
-                .before(uri("http://localhost:8080"))
+                .before(uri(baseUri))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "userServiceCircuitBreaker",
                         URI.create("forward:/fallbackRoute/user")

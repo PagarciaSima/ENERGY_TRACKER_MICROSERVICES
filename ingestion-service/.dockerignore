@@ -1,0 +1,22 @@
+# ------------------------------------------------------------
+#  Docker build context exclusions
+# ------------------------------------------------------------
+# The image is built inside Docker with the official Maven image, so neither the
+# Maven wrapper nor the local build output has to be sent to the daemon.
+target/
+doc/
+HELP.md
+README.md
+mvnw
+mvnw.cmd
+.mvn/
+.git/
+.gitignore
+.gitattributes
+.classpath
+.factorypath
+.project
+.settings/
+.idea/
+*.iml
+*.log

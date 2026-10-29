@@ -1,6 +1,6 @@
 # ⚡ Ingestion Service
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that ingests energy usage readings from IoT devices for the **Energy Tracker** home energy tracking platform.
 
@@ -144,6 +144,25 @@ The event is published to the `energy-usage` topic; the consumer contract is def
 - **Maven** 3.9+
 - **Docker** (with Docker Compose) for Kafka
 
+### Running as a container
+
+This service ships a `Dockerfile` (multi-stage build, non-root user, `HEALTHCHECK` on `/actuator/health`) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: infrastructure + all seven microservices
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure must already be running)
+docker compose --env-file .env.docker up -d --build ingestion-service
+```
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9094` (external listener) | `kafka:9092` (internal listener) |
+| `SIMULATION_ENDPOINT` | `http://localhost:8082/api/v1/ingestion` | `http://ingestion-service:8082/api/v1/ingestion` |
+
+> The container waits for Kafka to report healthy before starting. Keep the batch simulators disabled inside Docker: `simulation.requests-per-interval` defaults to 10000.
+
 ### Running locally
 
 1. Start the infrastructure (Kafka in KRaft mode + Kafka UI) with Docker Compose:
@@ -218,22 +237,26 @@ The project follows a layered testing strategy. No real Kafka broker is required
 | `GlobalExceptionHandlerTest`        | Web slice               | `@WebMvcTest` + MockMvc (error mapping)      |
 | `IngestionServiceApplicationTests`  | Context load             | Bootstraps the context                       |
 
+Current status: **12 tests, 0 failures** (no broker, database or container needed).
+
 Run all tests:
 
 ```bash
-mvn test
+cd ingestion-service
+./mvnw test          # macOS/Linux
+.\mvnw.cmd test      # Windows
 ```
 
 Run only the fast unit tests (service logic, no Spring context):
 
 ```bash
-mvn test -Dtest=IngestionServiceTest
+.\mvnw.cmd test -Dtest=IngestionServiceTest
 ```
 
 Run the web slice tests:
 
 ```bash
-mvn test -Dtest=IngestionControllerTest,GlobalExceptionHandlerTest
+.\mvnw.cmd test -Dtest=IngestionControllerTest,GlobalExceptionHandlerTest
 ```
 
 ---
@@ -298,6 +321,10 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 
 ```
 ingestion-service
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main

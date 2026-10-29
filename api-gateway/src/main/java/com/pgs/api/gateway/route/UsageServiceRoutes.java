@@ -1,5 +1,6 @@
 package com.pgs.api.gateway.route;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
 import org.springframework.context.annotation.Bean;
@@ -29,13 +30,14 @@ public class UsageServiceRoutes {
      * Routes {@code /api/v1/usage/**} to the Usage Service, guarded by a circuit
      * breaker that forwards to the fallback route when the circuit is open.
      *
+     * @param baseUri base URI of the Usage Service, injected from {@code usage.service.uri}
      * @return the usage service router function
      */
     @Bean
-    RouterFunction<ServerResponse> usageRoute() {
+    RouterFunction<ServerResponse> usageRoute(@Value("${usage.service.uri}") String baseUri) {
         return route("usage-service")
                 .route(RequestPredicates.path("/api/v1/usage/**"), http())
-                .before(uri("http://localhost:8083"))
+                .before(uri(baseUri))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "usageServiceCircuitBreaker",
                         URI.create("forward:/fallbackRoute/usage")

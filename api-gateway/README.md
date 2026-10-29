@@ -1,6 +1,6 @@
 # 🚪 API Gateway
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.3-6DB33F) ![Keycloak](https://img.shields.io/badge/Keycloak-24.0.1-008AAA) ![Security](https://img.shields.io/badge/Security-OAuth2%20JWT-blue)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.3-6DB33F) ![Keycloak](https://img.shields.io/badge/Keycloak-24.0.1-008AAA) ![Security](https://img.shields.io/badge/Security-OAuth2%20JWT-blue) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that provides a single entry point, authentication and resilience layer for the **Energy Tracker** home energy tracking platform.
 
@@ -105,6 +105,9 @@ Keycloak is part of the local infrastructure and is started with the rest of the
 | Logout              | `http://localhost:8091/realms/het-security-realm/protocol/openid-connect/logout`     |
 | Admin console       | `http://localhost:8091` (admin credentials: `admin` / `admin`)                        |
 
+![Keycloak admin console — realm clients](../img/keycloak.png)
+*Keycloak admin console → **Clients** of `het-security-realm`: `home-energy-tracker-client` is the client that issues the tokens validated at the edge.*
+
 ### Supported grant types
 
 The realm's `home-energy-tracker-client` advertises the following `grant_types_supported`: `authorization_code`, `implicit`, `refresh_token`, `password`, `client_credentials`, `urn:openid:params:grant-type:ciba` and `urn:ietf:params:oauth:grant-type:device_code`. For local testing, the **`password`** and **`client_credentials`** grants are the most convenient (see [Getting a Token](#-getting-a-token)).
@@ -169,7 +172,10 @@ TOKEN=$(curl -s -X POST \
 curl -H "Authorization: Bearer $TOKEN" http://localhost:9000/api/v1/user/1
 ```
 
-> The same flow is preconfigured in [`postman.json`](../postman.json) inside the **🔐 Security (Keycloak)** folder: the *Get access token (password grant)* request stores the token in the `accessToken` collection variable, which every other request inherits as a Bearer token.
+> The same flow is preconfigured in [`postman.json`](../postman.json) inside the **🔐 Security (Keycloak)** folder: the *Get access token* requests (password grant and client credentials) store the token in the `accessToken` collection variable, which every other request inherits as a Bearer token.
+
+![Postman — Get access token (client credentials)](../img/get_access_token_postman.png)
+*The collection's **Security (Keycloak)** folder: the token request stores `access_token` in the `accessToken` variable (`expires_in: 300`), so every routed request can inherit it.*
 
 ---
 
@@ -259,6 +265,32 @@ The circuit-breaker filter also wraps every routed call in a `TimeLimiter`. Resi
 - **Keycloak** running on `http://localhost:8091` with the `het-security-realm` realm and the `home-energy-tracker-client` client — started together with the rest of the local infrastructure via `docker compose up -d` from the repository root. The realm and the client are **seeded from `docker/keycloak/realms/`** on every Keycloak boot, and its data is persisted in the `keycloak-data` volume (see [Keycloak provisioning and persistence](../README.md#-keycloak-provisioning-and-persistence)).
 - A valid access token for the calls you want to make (see [Getting a Token](#-getting-a-token)).
 
+### Running as a container
+
+The gateway ships a `Dockerfile` (multi-stage build, non-root user, `HEALTHCHECK` on `/actuator/health`) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: infrastructure + all seven microservices
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure and the downstream services must be running)
+docker compose --env-file .env.docker up -d --build api-gateway
+```
+
+The route targets and the Keycloak endpoint are **not** hardcoded: each one comes from a property with an environment-variable placeholder (`route/*Routes.java`), so the same image works on the host and inside Compose.
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `KEYCLOAK_JWK_SET_URI` | `http://localhost:8091/realms/het-security-realm/protocol/openid-connect/certs` | `http://keycloak:8080/realms/het-security-realm/protocol/openid-connect/certs` |
+| `KEYCLOAK_ISSUER_URI` | `http://localhost:8091/realms/het-security-realm` | same public URL (the `iss` claim is not validated) |
+| `USER_SERVICE_URI` | `http://localhost:8080` | `http://user-service:8080` |
+| `DEVICE_SERVICE_URI` | `http://localhost:8081` | `http://device-service:8081` |
+| `INGESTION_SERVICE_URI` | `http://localhost:8082` | `http://ingestion-service:8082` |
+| `USAGE_SERVICE_URI` | `http://localhost:8083` | `http://usage-service:8083` |
+| `INSIGHT_SERVICE_URI` | `http://localhost:8085` | `http://insight-service:8085` |
+
+> Clients keep obtaining tokens from the **public** Keycloak URL (`http://localhost:8091`), while the container fetches the JWKS from `keycloak:8080`: the `JwtDecoder` declared in `SecurityConfig` validates the signature only, not the `iss` claim, so no *issuer mismatch* occurs.
+
 ### Run the gateway
 
 ```bash
@@ -347,10 +379,11 @@ cd api-gateway
 | ----------------------------- | ----------- | ------------------------------------------------- |
 | `ApiGatewayApplicationTests`  | Smoke       | The Spring application context loads              |
 | `ServiceFallbackRoutesTest`   | Unit (MVC)  | Every fallback answers `503` with **its own** message on **its own** path, and the legacy shared `/fallbackRoute` is no longer registered |
+| `ServiceRouteForwardingTest`  | Integration (MockMvc + stub server) | Every route forwards to the URI injected from configuration (`*.service.uri`) and preserves the path — a JDK `HttpServer` on a random port plays the downstream services |
 
-The suite runs **without external infrastructure** — no downstream service, broker or database is required (the JWKS keys are fetched lazily, so Keycloak does not need to be running just to load the context). `ServiceFallbackRoutesTest` drives the router functions through `MockMvcBuilders.routerFunctions(...)`, so it needs neither a server nor Keycloak.
+The suite runs **without external infrastructure** — no downstream service, broker or database is required (the JWKS keys are fetched lazily, so Keycloak does not need to be running just to load the context). `ServiceFallbackRoutesTest` drives the router functions through `MockMvcBuilders.routerFunctions(...)`, and `ServiceRouteForwardingTest` boots the context with `@SpringBootTest` + `@AutoConfigureMockMvc(addFilters = false)` and points the five `*.service.uri` properties at the stub, so it fails if any route went back to a hardcoded `http://localhost:<port>`.
 
-Current status: **7 tests, 0 failures**.
+Current status: **12 tests, 0 failures**.
 
 > Security behaviour (`401` / `403`, public paths) and the circuit-breaker *open → fallback* flow with a real downstream failure are **not** covered by tests yet — see the [Roadmap](#-roadmap).
 
@@ -376,6 +409,10 @@ The `503` fallback body is a plain-text string (not the shared `ErrorResponse` J
 
 ```
 api-gateway
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main

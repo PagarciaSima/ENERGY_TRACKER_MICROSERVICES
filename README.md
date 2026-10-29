@@ -70,7 +70,7 @@ flowchart TB
     end
 
     subgraph ExternalCollaborators["External Systems"]
-        OllamaLLM[("Ollama LLM (:11434)\ndeepseek-coder")]
+        OllamaLLM[("Ollama LLM (:11434)\nllama3.2")]
         MailpitSMTP[("Mailpit SMTP & Web UI (:1025 / :8025)")]
     end
 
@@ -139,7 +139,7 @@ flowchart TB
 | | Redis | 7 (Alpine) | Distributed caching layer for fast user and device entity lookups |
 | | Flyway | (Spring Boot) | Database schema migrations and versioning |
 | **Artificial Intelligence** | Spring AI | 2.0.1 | ChatModel abstraction, prompt orchestration, and context injection |
-| | Ollama | Local runtime | Local host LLM provider executing `deepseek-coder` |
+| | Ollama | Local runtime | Local host LLM provider executing `llama3.2` |
 | **Security** | Spring Security OAuth2 Resource Server | (Spring Boot) | Edge JWT validation in the API Gateway (`SecurityConfig`) |
 | | Keycloak | 24.0.1 | Identity provider / authorization server issuing the platform's access tokens |
 | | Nimbus JOSE + JWT | (Spring Boot) | JWKS retrieval and JWT signature verification |
@@ -170,9 +170,15 @@ All supporting infrastructure containers are preconfigured in [`docker-compose.y
 | **Prometheus** | `prometheus` | `9090` | `9090` | Metrics TSDB — scrapes every service's `/actuator/prometheus` every 15s, 5-day retention |
 | **Grafana** | `grafana` | `3000` | `3000` | Dashboards pre-provisioned with the Prometheus datasource (admin: `admin` / `admin`) |
 
-> **Observability:** every service (gateway included) exposes Micrometer metrics on `/actuator/prometheus`. Prometheus reaches them through `host.docker.internal` as declared in [`docker/prometheus/prometheus.yml`](docker/prometheus/prometheus.yml), and Grafana boots with its datasource and dashboard provider already provisioned from [`docker/grafana/provisioning`](docker/grafana/provisioning).
+> **Observability:** every service (gateway included) exposes Micrometer metrics on `/actuator/prometheus`. Prometheus reaches them through `host.docker.internal` as declared in [`docker/prometheus/prometheus.yml`](docker/prometheus/prometheus.yml) — and through the container names in [`docker/prometheus/prometheus.docker.yml`](docker/prometheus/prometheus.docker.yml), which is selected with `PROMETHEUS_CONFIG_FILE` when the services also run in Docker (see [`.env.docker`](.env.docker)). Grafana boots with its datasource and dashboard provider already provisioned from [`docker/grafana/provisioning`](docker/grafana/provisioning).
 >
 > The Prometheus datasource is provisioned with the **pinned uid `prometheus`**, so dashboard JSON files must reference it as `{"type":"prometheus","uid":"prometheus"}`. Any dashboard dropped into [`docker/grafana/provisioning/dashboards/json/`](docker/grafana/provisioning/dashboards/json/) is picked up automatically — the file provider rescans the directory every 30 s, so no restart is needed — and lands in the *Home Energy Tracker* folder.
+
+![Prometheus target health](img/prometheus.png)
+*Prometheus → **Status → Target health**: the seven jobs scraped every 15 s. `ingestion-service` shows `DOWN` because it was stopped at capture time — exactly what this view is for.*
+
+![Grafana dashboard](img/grafana.png)
+*Grafana → **Home Energy Tracker → Overview**: request rate and JVM heap per application, scrape-target health and HTTP status codes, all from the provisioned Prometheus datasource.*
 
 ### 🔐 Keycloak provisioning and persistence
 
@@ -184,6 +190,9 @@ The realm is **not** created by hand any more — it is seeded from versioned fi
 | `docker/keycloak/realms/het-security-realm-users-0.json` | Realm users (today only the `home-energy-tracker-client` service account) |
 
 Keycloak starts with `start-dev --import-realm`, so on every boot it imports the JSON files found in `/opt/keycloak/data/import` (the bind-mounted `docker/keycloak/realms/`). Its runtime data is kept in an embedded H2 database under `/opt/keycloak/data`, which is stored in the **`keycloak-data` volume** — that is what makes the realm survive the removal of the container.
+
+![Keycloak admin console](img/keycloak.png)
+*Keycloak admin console → **Clients** of the `het-security-realm`: `home-energy-tracker-client` is the client used by the Postman collection and by every routed request through the gateway.*
 
 > ⚠️ The import uses the `IGNORE_EXISTING` strategy: an existing realm is **never overwritten**. Changes made to the JSON files are only applied when the realm does not exist yet (fresh `keycloak-data` volume or a deleted realm).
 
@@ -227,6 +236,9 @@ sequenceDiagram
     Usage->>Influx: Write Point (measurement: energy_usage, tag: deviceId, field: energyConsumed)
 ```
 
+![InfluxDB Data Explorer](img/influxdb.png)
+*InfluxDB → **Data Explorer** over the `usage-bucket`: the measurement `energy_usage` queried by `deviceId` and the `energyConsumed` field written by the Usage Service.*
+
 ### 2. Threshold-Based Alerting Pipeline
 
 ```mermaid
@@ -251,6 +263,12 @@ sequenceDiagram
     AlertSvc->>AlertSvc: Persist Audit Record (sent = true) in MySQL
 ```
 
+![Kafka UI — energy-alerts topic](img/kafka-ui.png)
+*Kafbat UI → **Topics → `energy-alerts`**: the `AlertingEvent` payloads published by the Usage Service when a threshold is exceeded.*
+
+![Mailpit inbox](img/mailpit.png)
+*Mailpit → **Inbox**: one "Energy Usage Alert for User N" email per breach, with the configured threshold and the measured consumption.*
+
 ### 3. AI-Powered Advisory Pipeline
 
 ```mermaid
@@ -271,6 +289,9 @@ sequenceDiagram
 ```
 
 > ⚠️ **Ollama is not part of `docker-compose.yml`**: it must be running locally on `:11434` with the configured model already pulled. When it is down, `insight-service` answers **`503 Service Unavailable`** (`"Ollama is unavailable: ..."`) in **~1-2 seconds** instead of hanging, thanks to the `spring.ai.retry.*` configuration.
+
+![Saving tips through the gateway](img/get_saving_tips_ollama_endpoint.png)
+*`GET http://localhost:9000/api/v1/insight/saving-tips/1` with a Bearer token: `200 OK` in ~28 s returning the LLM `tips` plus the aggregated `energyUsage`.*
 
 ---
 
@@ -293,6 +314,9 @@ When running locally, each service exposes its Swagger UI documentation and actu
 | **Mailpit UI** | [http://localhost:8025](http://localhost:8025) | Live inbox for alert notifications |
 | **Prometheus** | [http://localhost:9090](http://localhost:9090) | Scrape targets & health, PromQL query explorer (`/-/healthy`, `/api/v1/targets`) |
 | **Grafana** | [http://localhost:3000](http://localhost:3000) | Metrics dashboards (`admin` / `admin`), Prometheus datasource provisioned |
+
+![Swagger UI of the User Service](img/openapi.png)
+*SpringDoc UI (here the User Service, group `users`): every service exposes its own Swagger UI, and the gateway aggregates the five specs under `/docs/<service>/v3/api-docs`.*
 
 ---
 
@@ -322,13 +346,9 @@ docker compose ps
 ```
 
 > **Note on MySQL Databases:**  
-> The `docker/mysql/init.sql` script creates `home_energy_tracker`. If connecting each microservice independently, create the individual service databases:
-> ```sql
-> CREATE DATABASE IF NOT EXISTS home_energy_tracker_user;
-> CREATE DATABASE IF NOT EXISTS home_energy_tracker_device;
-> CREATE DATABASE IF NOT EXISTS home_energy_tracker_alert;
-> ```
-> Flyway will automatically run all migrations upon starting each service.
+> `docker/mysql/init.sql` creates every database the platform needs — `home_energy_tracker` plus the three service-owned ones (`home_energy_tracker_user`, `home_energy_tracker_device`, `home_energy_tracker_alert`). Flyway then runs each service's migrations automatically on startup.
+>
+> The script runs only the **first time** the container starts with an empty `db-data` volume: if you already had that volume, create the databases manually or run `docker compose down -v` to start from scratch.
 
 ---
 
@@ -337,13 +357,41 @@ docker compose ps
 Install Ollama from [ollama.com](https://ollama.com), ensure it is running, and pull the required model:
 
 ```bash
-ollama serve
-ollama pull deepseek-coder
+ollama serve                 # keep it running: insight-service calls it on :11434
+ollama pull llama3.2         # the model configured in insight-service
 ```
+
+> 🩺 **Windows troubleshooting:** the desktop app (`ollama app.exe`) can stay alive while its HTTP server is dead. Check with `curl http://localhost:11434/api/tags`; if it fails, run `taskkill /F /IM "ollama app.exe"` and start `ollama serve` again. A dead Ollama is answered by the insight endpoint with a fast **`503 Service Unavailable`** instead of a request that hangs.
 
 ---
 
 ### 3. Start the Microservices
+
+You can run the whole platform **with Docker** (no JDK/Maven required) or start each service manually.
+
+#### Option A — everything with Docker (one command)
+
+```bash
+docker compose --env-file .env.docker up -d --build
+```
+
+This builds the seven images (`het/<service>:local`, multi-stage `maven:3.9-eclipse-temurin-21` → `eclipse-temurin:21-jre-jammy`) and starts them next to the infrastructure. Inside the Compose network every service is reached by its container name instead of `localhost`, and each one declares an `/actuator/health` health check, so `docker compose ps` shows `(healthy)` when the platform is ready.
+
+| Command | What it does |
+| :--- | :--- |
+| `docker compose --env-file .env.docker up -d --build` | Builds and starts infrastructure **+** the 7 microservices (profile `app`) |
+| `docker compose --env-file .env.docker logs -f user-service` | Follows one service's logs |
+| `docker compose --env-file .env.docker down` | Stops everything and keeps the data volumes |
+| `docker compose --env-file .env.docker down -v` | Also drops the data (MySQL, Kafka, InfluxDB, Keycloak) |
+| `docker compose up -d` | Infrastructure only — the usual workflow when running the services from the IDE |
+
+Notes:
+
+- **Ollama keeps running on the host**: `insight-service` reaches it through `host.docker.internal:11434`.
+- Images skip the unit tests by default (`SKIP_TESTS=true`). Build them with tests using `SKIP_TESTS=false docker compose --env-file .env.docker build`.
+- The host ports stay 1:1 with the service ports (`8080`-`8085`, `9000`), so `postman.json` keeps working. **Stop any service started from the IDE first**, otherwise the port is already taken.
+
+#### Option B — manual startup (IDE / `mvnw spring-boot:run`)
 
 Recommended startup order:
 
@@ -436,6 +484,9 @@ A preconfigured Postman collection is available in the root repository: [`postma
 
 > Collection variables are preconfigured for local development (`gatewayBaseUrl` `:9000`, `keycloakBaseUrl` `:8091`, realm `het-security-realm`, client `home-energy-tracker-client`). The seeded realm contains **no end users yet**, so create one in the Admin console first and set `username` / `password` before requesting a token — then re-export the realm (see [Keycloak provisioning and persistence](#-keycloak-provisioning-and-persistence)) so the user stays versioned.
 
+![Postman — Get access token (client credentials)](img/get_access_token_postman.png)
+*The **🔐 Security (Keycloak)** folder: the token request runs a post-response script that stores `access_token` in the collection variable `accessToken`, which every other request inherits as a Bearer token.*
+
 ---
 
 ## 🧪 Testing Strategy
@@ -451,16 +502,20 @@ flowchart TD
     Unit --> Slice --> Integration
 ```
 
-Run test suites per module (there is no root aggregator POM, so run Maven inside each service folder):
+Run test suites per module (there is no root aggregator POM, so use each service's own Maven wrapper):
 ```bash
 # From a single service folder:
-cd user-service && mvn test
+cd user-service
+./mvnw test          # macOS/Linux
+.\mvnw.cmd test      # Windows
 
 # Or loop over every service from the repository root:
 for d in user-service device-service ingestion-service usage-service alert-service insight-service api-gateway; do
-  (cd "$d" && mvn -q test) || echo "FAILED: $d"
+  (cd "$d" && ./mvnw -q test) || echo "FAILED: $d"
 done
 ```
+
+Current status: **194 tests, 0 failures** (user 56, device 41, usage 27, ingestion 12, alert 8, insight 38, api-gateway 12). The gateway suite includes `ServiceFallbackRoutesTest` (each circuit-breaker fallback answers with its own service name) and `ServiceRouteForwardingTest` (every route forwards to the URI injected from configuration, checked against a JDK stub server).
 
 ---
 
@@ -469,9 +524,10 @@ done
 ```
 ENERGY_TRACKER
 ├── docker/                           # Database, identity and monitoring configuration
-│   ├── mysql/init.sql
+│   ├── mysql/init.sql                # Creates the 4 databases (main + one per JPA service)
 │   ├── keycloak/realms/              # Keycloak realm import/export files (het-security-realm)
-│   ├── prometheus/prometheus.yml     # Scrape configuration for the microservices
+│   ├── prometheus/prometheus.yml     # Scrape configuration for services running on the host
+│   ├── prometheus/prometheus.docker.yml  # Scrape configuration for the dockerized services
 │   ├── grafana/provisioning/         # Grafana datasource + dashboard provider
 │   ├── influxdb_data/
 │   └── kafka_data/
@@ -484,7 +540,10 @@ ENERGY_TRACKER
 ├── alert-service/                    # Email notification & audit log consumer (:8084)
 ├── insight-service/                  # AI recommendations using Ollama (:8085)
 ├── api-gateway/                      # Single entry point + JWT auth + circuit breakers (:9000)
-├── docker-compose.yml                # Unified infrastructure definition
+├── docker-compose.yml                # Infrastructure + the 7 microservices (Compose profile `app`)
+├── .env.docker                       # Enables the `app` profile and the Docker scrape config
 ├── postman.json                      # Ready-to-import Postman test collection
 └── README.md                         # Platform master documentation
 ```
+
+> Every service folder contains its own **`Dockerfile`** (multi-stage build: Maven + JRE 21, non-root user, `/actuator/health` health check) and a **`.dockerignore`**, so the whole platform can be built and started from Compose with `docker compose --env-file .env.docker up -d --build`.

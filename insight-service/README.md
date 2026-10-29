@@ -1,6 +1,6 @@
 # 💡 Insight Service
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-6DB33F)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-6DB33F) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that turns raw energy usage into **actionable, personalized advice** for the **Energy Tracker** home energy tracking platform.
 
@@ -62,7 +62,7 @@ flowchart LR
 | Spring Boot                | 4.1.1      | Application framework                          |
 | Spring WebMVC              | (SB)       | REST controller                                |
 | Spring AI                  | 2.0.1      | `ChatClient` / `OllamaChatModel` abstraction   |
-| Ollama                     | —          | Local LLM runtime (model `deepseek-coder`)     |
+| Ollama                     | —          | Local LLM runtime (model `llama3.2`)           |
 | RestClient                | (SB)       | HTTP client to the Usage Service               |
 | AspectJ (Spring AOP)       | (SB)       | Aspect-oriented logging / timing               |
 | Spring Boot Actuator       | (SB)       | Health, info and metrics endpoints             |
@@ -113,6 +113,9 @@ curl http://localhost:8085/api/v1/insight/saving-tips/1
   "energyUsage": 12.75
 }
 ```
+
+![Saving tips through the gateway](../img/get_saving_tips_ollama_endpoint.png)
+*The same endpoint called through the gateway with a Bearer token: `200 OK` in ~28 s, returning the `llama3.2` tips and the aggregated `energyUsage` of the last 3 days.*
 
 ### Get the consumption overview for user 1
 
@@ -212,7 +215,7 @@ The service depends on two collaborators:
 | Dependency       | Where                      | Required for                                       |
 | ---------------- | -------------------------- | -------------------------------------------------- |
 | **Usage Service** | `http://localhost:8083`   | The aggregated consumption data                     |
-| **Ollama**        | `http://localhost:11434`  | The chat model (`deepseek-coder` must be available) |
+| **Ollama**        | `http://localhost:11434`  | The chat model (`llama3.2` must be available) |
 
 The **Usage Service** (`:8083`) expects **Kafka** and **InfluxDB** to be reachable, so the platform infrastructure (MySQL, Redis, Kafka, InfluxDB) is started from the repository root with Docker Compose:
 
@@ -226,20 +229,22 @@ The Usage Service itself is a separate Spring Boot application, so it must be st
 mvn spring-boot:run
 ```
 
-> **Ollama is not part of the bundled `docker-compose.yml`.** It must be running locally (or added to the compose file) with the model already pulled:
+> **Ollama is not part of the bundled `docker-compose.yml`.** It runs on the host (or on any reachable machine) with the model already pulled. The base URL is configurable through `spring.ai.ollama.base-url` / `SPRING_AI_OLLAMA_BASE_URL`.
 
 ```bash
 # install Ollama from https://ollama.com, then:
 ollama serve
-ollama pull deepseek-coder
+ollama pull llama3.2         # must match spring.ai.ollama.chat.options.model
 ```
 
 Verify that the server is actually listening **before** starting this service:
 
 ```bash
 curl http://localhost:11434/api/tags      # expected: {"models":[...]}
-ollama list                               # expected: the configured model, e.g. deepseek-coder:latest
+ollama list                               # expected: llama3.2:latest (the configured model)
 ```
+
+> 🐳 When this service runs as a container, Compose points it at the host with `SPRING_AI_OLLAMA_BASE_URL=http://host.docker.internal:11434`.
 
 > 🩺 **Troubleshooting (Windows):** the desktop app (`ollama app.exe`) can stay alive while its HTTP server is dead. In that state `ollama list` answers `existing instance found… Error: timed out waiting for server to start` and `%LOCALAPPDATA%\Ollama\app.log` shows `ollama server not ready after retries`. Fix it by killing the zombie and starting the server again:
 >
@@ -261,6 +266,25 @@ ollama list                               # expected: the configured model, e.g.
 
 3. The service is available at `http://localhost:8085` (Swagger UI at `http://localhost:8085/swagger-ui.html`).
 
+### Running as a container
+
+This service ships a `Dockerfile` (multi-stage build, non-root user, `/actuator/health` health check) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: builds and starts the whole platform
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure must already be running)
+docker compose --env-file .env.docker up -d --build insight-service
+```
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `USAGE_SERVICE_URL` | `http://localhost:8083/api/v1/usage` | `http://usage-service:8083/api/v1/usage` |
+| `SPRING_AI_OLLAMA_BASE_URL` | `http://localhost:11434` | `http://host.docker.internal:11434` |
+
+> Ollama is **not** part of the Compose stack: the container reaches the host instance through `host.docker.internal` (see `extra_hosts` in `docker-compose.yml`). If Ollama is down, the endpoint answers `503` in ~1-3 s instead of hanging.
+
 > The consumption data is produced by the **Ingestion Service** (`:8082`) → Kafka → **Usage Service** (`:8083`). You can use the bundled data simulators there to generate traffic.
 
 ---
@@ -272,7 +296,7 @@ ollama list                               # expected: the configured model, e.g.
 | --------------------------------------- | -------------------------------------- | --------------------------------------------- |
 | `server.port`                           | `8085`                                 | HTTP port                                     |
 | `usage.service.url`                     | `http://localhost:8083/api/v1/usage`   | Usage Service base URL                        |
-| `spring.ai.ollama.chat.options.model`   | `deepseek-coder`                       | Chat model used to generate the insights      |
+| `spring.ai.ollama.chat.options.model`   | `llama3.2`                             | Chat model used to generate the insights      |
 | `spring.ai.ollama.base-url`             | `http://localhost:11434`               | Ollama server address (Spring AI default)     |
 | `spring.ai.ollama.init.pull-model-strategy` | `never`                             | Do not pull the model on startup              |
 | `spring.ai.retry.max-attempts`          | `2`                                    | Attempts per model call (Spring AI default: `10`) |
@@ -364,6 +388,10 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 
 ```
 insight-service
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main

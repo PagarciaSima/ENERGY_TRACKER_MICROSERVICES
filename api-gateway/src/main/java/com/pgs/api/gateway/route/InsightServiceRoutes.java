@@ -1,5 +1,6 @@
 package com.pgs.api.gateway.route;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
 import org.springframework.context.annotation.Bean;
@@ -29,13 +30,14 @@ public class InsightServiceRoutes {
      * Routes {@code /api/v1/insight/**} to the Insight Service, guarded by a circuit
      * breaker that forwards to the fallback route when the circuit is open.
      *
+     * @param baseUri base URI of the Insight Service, injected from {@code insight.service.uri}
      * @return the insight service router function
      */
     @Bean
-    RouterFunction<ServerResponse> insightRoute() {
+    RouterFunction<ServerResponse> insightRoute(@Value("${insight.service.uri}") String baseUri) {
         return route("insight-service")
                 .route(RequestPredicates.path("/api/v1/insight/**"), http())
-                .before(uri("http://localhost:8085"))
+                .before(uri(baseUri))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "insightServiceCircuitBreaker",
                         URI.create("forward:/fallbackRoute/insight")

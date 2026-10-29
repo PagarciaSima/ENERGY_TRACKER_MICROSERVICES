@@ -41,7 +41,12 @@ logs/
 *.class
 
 ### Maven & Gradle ###
-.mvn/
 .gradle/
+# NOTE: `.mvn/` must stay versioned — it holds .mvn/wrapper/maven-wrapper.properties,
+# and without it `./mvnw` cannot bootstrap Maven in a fresh clone (which also breaks
+# the Dockerfile build if it were to use the wrapper).
 docker/influxdb_data
 docker/influxdb_data/influxd.bolt
+
+### Generated documentation ###
+user-service/doc/

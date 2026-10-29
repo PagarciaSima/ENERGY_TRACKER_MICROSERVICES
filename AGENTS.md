@@ -74,7 +74,11 @@ ENERGY_TRACKER
 ├── postman.json               # Ready-to-import Postman collection (all services)
 ├── docker/                    # Init scripts, bind-mounted data & monitoring config (mysql/init.sql, influxdb_data/,
 │                              #   kafka_data/, keycloak/realms/*.json, prometheus/prometheus.yml, grafana/provisioning/)
-├── img/                       # Architectural schematics (flowchart.jpg)
+├── img/                       # Versioned screenshots: flowchart.jpg + the captures embedded in the READMEs
+│                              #   (openapi.png, keycloak.png, kafka-ui.png, mailpit.png, influxdb.png,
+│                              #    prometheus.png, grafana.png, get_access_token_postman.png,
+│                              #    get_saving_tips_ollama_endpoint.png); img/screenshots/ is the empty
+│                              #    placeholder for future phase-by-phase captures
 ├── user-service/              # :8080 — README.md + pom.xml + mvnw + src
 ├── device-service/            # :8081 — README.md + pom.xml + mvnw + src
 ├── ingestion-service/         # :8082 — README.md + pom.xml + mvnw + src
@@ -270,7 +274,21 @@ Update the affected sections whenever your change alters any of:
 - error handling → **Error Handling** table;
 - classes/packages added/removed → **Project Structure** tree;
 - dependencies/versions → **Tech Stack** table and the badges at the top;
-- a completed roadmap item → tick it in **Roadmap** (and add new ones if you found follow-ups).
+- a completed roadmap item → tick it in **Roadmap** (and add new ones if you found follow-ups);
+- files added at the service root (e.g. `Dockerfile`, `.dockerignore`, `mvnw`) → **Project Structure** tree.
+
+#### Screenshots
+
+Every screenshot lives in the **repository-level** [`img/`](img) folder — there is no per-service image folder.
+Reference them with a relative path and a descriptive `alt`:
+
+- from the root `README.md` (or any file at the repository root): `![Kafka UI](img/kafka-ui.png)`
+- from a service `README.md`: `![Kafka UI](../img/kafka-ui.png)`
+
+Use plain Markdown (no HTML `width`) and add a one-line caption in italics right under the image describing
+what it shows. When you add, rename or replace a capture, update the master checklist in
+[`plan.md`](plan.md) §18 as well, and never reference an image that is not committed — a broken link is
+worse than no image.
 
 Each service README follows the same template — keep it that way:
 
@@ -307,6 +325,10 @@ Do not reinvent these; copy the existing implementations.
   delegate immediately to a service and use a DLT for poison messages (`KafkaConfig` in alert).
 - **Outbound HTTP:** `RestClient` beans declared in `*Config` classes, base URL injected from
   properties (e.g. `usage.service.url`, `device.service.url`, `user.service.url`).
+- **Configurable endpoints:** every inter-service or infrastructure URL must come from a property
+  with an environment-variable placeholder (`${USAGE_SERVICE_URL:http://localhost:8083/api/v1/usage}`),
+  never hardcoded in Java. That is what allows the same jar/image to run on a host, inside Compose or
+  in Kubernetes (see the gateway's `*.service.uri` properties, `.env.docker` and `docker-compose.yml`).
 - **Gateway routing:** one `@Configuration` per service in `api-gateway/route`, each defining the
   route (`RequestPredicates.path(...)` → `uri(...)`) plus a `CircuitBreakerFilterFunctions.circuitBreaker`
   filter and its **own** fallback path `/fallbackRoute/<service>` returning `503`. Never share a
@@ -343,6 +365,22 @@ done
 docker compose up -d     # MySQL, Redis, Kafka (+ Kafka UI), InfluxDB, Mailpit, Keycloak, Prometheus, Grafana
 docker compose down
 ```
+
+### Run the whole platform with Docker
+
+```bash
+docker compose --env-file .env.docker up -d --build   # infrastructure + the 7 microservices (profile `app`)
+docker compose --env-file .env.docker down            # keeps the data volumes
+docker compose --env-file .env.docker down -v         # drops the data (re-runs docker/mysql/init.sql)
+```
+
+Every service has its own `Dockerfile` (multi-stage `maven:3.9-eclipse-temurin-21` →
+`eclipse-temurin:21-jre-jammy`, non-root user, `HEALTHCHECK` against `/actuator/health`) and is wired to
+the others with environment variables (`USER_SERVICE_URI`, `USAGE_SERVICE_URL`, `MYSQL_URL`,
+`KAFKA_BOOTSTRAP_SERVERS`, `INFLUX_URL`, `SPRING_MAIL_HOST`, ...) declared in `docker-compose.yml`
+and `.env.docker`. Ollama is **not** containerised: `insight-service` reaches the host instance
+through `host.docker.internal:11434`. The seven services sit behind the Compose `app` profile, so a
+plain `docker compose up -d` still starts the infrastructure only.
 
 Kafka UI → `http://localhost:8070` · InfluxDB → `http://localhost:8072` · Mailpit UI → `http://localhost:8025` ·
 Prometheus → `http://localhost:9090` · Grafana → `http://localhost:3000` (`admin` / `admin`) ·
@@ -395,6 +433,7 @@ Useful context so agents don't "rediscover" these; fix opportunistically and upd
 - **No root/aggregator POM** — build and test per service; the parent README's root `mvn test`
   snippet is misleading and should be corrected.
 - **No CI** (`.github/workflows` absent) — no automated build/test gate.
+- **Screenshots:** `img/` holds the 10 captures embedded in the READMEs (architecture, Swagger, Keycloak, Postman, InfluxDB, Kafka UI, Mailpit, Prometheus, Grafana and the insight endpoint); `img/screenshots/` is an empty placeholder kept for the phase-by-phase captures of `plan.md` §18. Never reference an image that is not committed.
 - **Duplicated Kafka event classes** (`EnergyUsageEvent`, `AlertingEvent`) across ingestion, usage
   and alert services; several roadmaps propose extracting a shared module.
 - **JavaDoc:** every class, record, enum and method under `src/main/java` now carries JavaDoc

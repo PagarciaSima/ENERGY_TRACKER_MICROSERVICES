@@ -1,5 +1,6 @@
 package com.pgs.api.gateway.route;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
 import org.springframework.context.annotation.Bean;
@@ -29,13 +30,14 @@ public class IngestionServiceRoutes {
      * Routes {@code /api/v1/ingestion/**} to the Ingestion Service, guarded by a
      * circuit breaker that forwards to the fallback route when the circuit is open.
      *
+     * @param baseUri base URI of the Ingestion Service, injected from {@code ingestion.service.uri}
      * @return the ingestion service router function
      */
     @Bean
-    RouterFunction<ServerResponse> ingestionRoute() {
+    RouterFunction<ServerResponse> ingestionRoute(@Value("${ingestion.service.uri}") String baseUri) {
         return route("ingestion-service")
                 .route(RequestPredicates.path("/api/v1/ingestion/**"), http())
-                .before(uri("http://localhost:8082"))
+                .before(uri(baseUri))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "ingestionServiceCircuitBreaker",
                         URI.create("forward:/fallbackRoute/ingestion")

@@ -1,6 +1,6 @@
 # 🛠️ Device Service
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED)
 
 > Java Spring Boot microservice that manages the devices of the **Energy Tracker** home energy tracking platform.
 
@@ -288,6 +288,25 @@ The schema is created and versioned by the Flyway migration `V1__device_table.sq
 - **Maven** 3.9+
 - **Docker** (with Docker Compose) for MySQL and Redis
 
+### Running as a container
+
+This service ships a `Dockerfile` (multi-stage build, non-root user, `HEALTHCHECK` on `/actuator/health`) and belongs to the Compose `app` profile:
+
+```bash
+# from the repository root: infrastructure + all seven microservices
+docker compose --env-file .env.docker up -d --build
+
+# or just this service (the infrastructure must already be running)
+docker compose --env-file .env.docker up -d --build device-service
+```
+
+| Environment variable | Default (host run) | Value injected by Compose |
+| :--- | :--- | :--- |
+| `MYSQL_URL` | `jdbc:mysql://localhost:3306/home_energy_tracker_device` | `jdbc:mysql://mysql:3306/home_energy_tracker_device` |
+| `REDIS_HOST` | `localhost` | `redis` |
+
+> The container waits for MySQL and Redis to report healthy (`depends_on: condition: service_healthy`) and Flyway runs the migrations on startup.
+
 ### Running locally
 
 1. Start the infrastructure (MySQL + Redis) with Docker Compose from the project root:
@@ -372,28 +391,32 @@ The project follows a layered testing strategy mirroring the user microservice: 
 | `DeviceServiceIntegrationTest`       | E2E (Testcontainers)    | Real MySQL + Redis + full application        |
 | `PopulateDB`                         | Dev seed (disabled)     | Inserts 200 sample devices for 10 users      |
 
+Current status: **41 tests, 0 failures** (the E2E class spins up MySQL and Redis with Testcontainers, so Docker must be running; `PopulateDB` is `@Disabled` and not counted).
+
 Run all tests:
 
 ```bash
-mvn test
+cd device-service
+./mvnw test          # macOS/Linux
+.\mvnw.cmd test      # Windows
 ```
 
 Run only the fast unit tests (service logic, no Spring / infra):
 
 ```bash
-mvn test -Dtest=DeviceServiceTest
+.\mvnw.cmd test -Dtest=DeviceServiceTest
 ```
 
 Run the slice tests (web, JPA + H2, cache):
 
 ```bash
-mvn test -Dtest=DeviceControllerTest,GlobalExceptionHandlerTest,DeviceSpecificationTest,DeviceServiceCacheTest
+.\mvnw.cmd test -Dtest=DeviceControllerTest,GlobalExceptionHandlerTest,DeviceSpecificationTest,DeviceServiceCacheTest
 ```
 
 Run the E2E test (requires Docker to spin up real MySQL and Redis containers):
 
 ```bash
-mvn test -Dtest=DeviceServiceIntegrationTest
+.\mvnw.cmd test -Dtest=DeviceServiceIntegrationTest
 ```
 
 > **Note:** `PopulateDB` is intended as a manual seeding utility. To run it, remove the `@Disabled` annotation (or run it from the IDE) against a local MySQL instance.
@@ -480,6 +503,10 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 
 ```
 device-service
+├── Dockerfile                 # Multi-stage build: maven:3.9 + JRE 21, non-root user, /actuator/health healthcheck
+├── .dockerignore              # Keeps target/, doc/ and the IDE files out of the build context
+├── mvnw / mvnw.cmd            # Maven wrapper (./mvnw test on macOS/Linux, .\mvnw.cmd test on Windows)
+├── .mvn/wrapper/maven-wrapper.properties
 ├── pom.xml
 ├── src
 │   ├── main
