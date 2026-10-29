@@ -24,11 +24,13 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.web.client.ResourceAccessException;
 
 import com.pgs.insight.service.client.UsageClient;
 import com.pgs.insight.service.dto.DeviceDto;
 import com.pgs.insight.service.dto.InsightDto;
 import com.pgs.insight.service.dto.UsageDto;
+import com.pgs.insight.service.exception.DependencyUnavailableException;
 
 /**
  * Unit tests for {@link InsightService}.
@@ -149,6 +151,32 @@ class InsightServiceTest {
 					.hasMessage("usage service unavailable");
 			verify(ollamaChatModel, never()).call(any(Prompt.class));
 		}
+
+		@Test
+		@DisplayName("translates a connection failure of the usage service into a 503")
+		void translatesUsageServiceConnectionFailure() {
+			when(usageClient.getXDaysUsageForUser(42L, 3))
+					.thenThrow(new ResourceAccessException("Connection refused"));
+
+			assertThatThrownBy(() -> insightService.getSavingsTips(42L))
+					.isInstanceOf(DependencyUnavailableException.class)
+					.hasMessageContaining("Usage Service")
+					.hasMessageContaining("Connection refused");
+			verify(ollamaChatModel, never()).call(any(Prompt.class));
+		}
+
+		@Test
+		@DisplayName("translates a connection failure of the chat model into a 503")
+		void translatesChatModelConnectionFailure() {
+			when(usageClient.getXDaysUsageForUser(42L, 3)).thenReturn(usageWithDevices());
+			when(ollamaChatModel.call(any(Prompt.class)))
+					.thenThrow(new ResourceAccessException("Connection refused"));
+
+			assertThatThrownBy(() -> insightService.getSavingsTips(42L))
+					.isInstanceOf(DependencyUnavailableException.class)
+					.hasMessageContaining("Ollama")
+					.hasMessageContaining("Connection refused");
+		}
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -199,6 +227,18 @@ class InsightServiceTest {
 			assertThatThrownBy(() -> insightService.getOverview(42L))
 					.isInstanceOf(IllegalStateException.class)
 					.hasMessage("ollama unreachable");
+		}
+
+		@Test
+		@DisplayName("translates a connection failure of the chat model into a 503")
+		void translatesChatModelConnectionFailure() {
+			when(usageClient.getXDaysUsageForUser(42L, 3)).thenReturn(usageWithDevices());
+			when(ollamaChatModel.call(any(Prompt.class)))
+					.thenThrow(new ResourceAccessException("Connection refused"));
+
+			assertThatThrownBy(() -> insightService.getOverview(42L))
+					.isInstanceOf(DependencyUnavailableException.class)
+					.hasMessageContaining("Ollama");
 		}
 	}
 }

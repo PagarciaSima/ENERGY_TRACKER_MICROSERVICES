@@ -20,6 +20,7 @@ It is a **stateless, read-only** service: it owns no database, consumes no Kafka
 - [Data Model](#-data-model)
 - [Getting Started](#-getting-started)
 - [Configuration](#-configuration)
+- [Actuator & Metrics](#-actuator--metrics)
 - [Testing](#-testing)
 - [Error Handling](#-error-handling)
 - [Project Structure](#-project-structure)
@@ -64,6 +65,8 @@ flowchart LR
 | Ollama                     | —          | Local LLM runtime (model `deepseek-coder`)     |
 | RestClient                | (SB)       | HTTP client to the Usage Service               |
 | AspectJ (Spring AOP)       | (SB)       | Aspect-oriented logging / timing               |
+| Spring Boot Actuator       | (SB)       | Health, info and metrics endpoints             |
+| Micrometer Prometheus Registry | (SB)   | Metrics in Prometheus exposition format        |
 | jackson-datatype-jsr310    | —          | `Instant` / time API serialization             |
 | SpringDoc OpenAPI          | 3.1.1      | Swagger UI / API documentation                 |
 | Lombok                     | 1.18.36    | Boilerplate reduction                          |
@@ -231,6 +234,22 @@ ollama serve
 ollama pull deepseek-coder
 ```
 
+Verify that the server is actually listening **before** starting this service:
+
+```bash
+curl http://localhost:11434/api/tags      # expected: {"models":[...]}
+ollama list                               # expected: the configured model, e.g. deepseek-coder:latest
+```
+
+> 🩺 **Troubleshooting (Windows):** the desktop app (`ollama app.exe`) can stay alive while its HTTP server is dead. In that state `ollama list` answers `existing instance found… Error: timed out waiting for server to start` and `%LOCALAPPDATA%\Ollama\app.log` shows `ollama server not ready after retries`. Fix it by killing the zombie and starting the server again:
+>
+> ```powershell
+> taskkill /F /IM "ollama app.exe"
+> ollama serve
+> ```
+>
+> Without a listening server every insight call ends in a `503` (`Ollama is unavailable: Connection refused`).
+
 ### Running locally
 
 1. Start the infrastructure, the Usage Service and Ollama (see above).
@@ -256,13 +275,38 @@ ollama pull deepseek-coder
 | `spring.ai.ollama.chat.options.model`   | `deepseek-coder`                       | Chat model used to generate the insights      |
 | `spring.ai.ollama.base-url`             | `http://localhost:11434`               | Ollama server address (Spring AI default)     |
 | `spring.ai.ollama.init.pull-model-strategy` | `never`                             | Do not pull the model on startup              |
+| `spring.ai.retry.max-attempts`          | `2`                                    | Attempts per model call (Spring AI default: `10`) |
+| `spring.ai.retry.backoff.initial-interval` | `1s`                                | Initial wait between attempts (default: `2000ms`) |
+| `spring.ai.retry.backoff.multiplier`    | `2`                                    | Backoff multiplier (default: `5`)             |
+| `spring.ai.retry.backoff.max-interval`  | `2s`                                   | Cap for the backoff (no default: unbounded)   |
 | `management.endpoints.web.exposure.include` | `health,info,prometheus`           | Actuator endpoints exposed                    |
+| `management.endpoint.health.show-details`   | `when-authorized`                  | Health detail visibility                      |
+| `management.metrics.tags.application`       | `insight-service`                  | Common tag added to all metrics               |
 | `springdoc.swagger-ui.path`             | `/swagger-ui.html`                     | Swagger UI path                               |
 | `springdoc.group-configs[0].group`       | `insight`                              | OpenAPI group for the insight endpoints       |
 
 > `spring.ai.ollama.init.pull-model-strategy=never` means the service **will not** download the model: it must already be present in Ollama, otherwise every call fails with a `500`.
 
 > `usage.service.url` is only read when the `usageRestClient` bean is created. Since it is bound to the `RestClient.Builder` auto-configured by Spring Boot, any application-wide customizer (message converters, observability, SSL) is applied to the outbound calls as well.
+
+---
+
+## 📊 Actuator & Metrics
+
+The service ships **Spring Boot Actuator** and the **Micrometer Prometheus registry**, so its runtime metrics are exposed in Prometheus exposition format and scraped every 15 seconds by the `prometheus` container declared in [`docker-compose.yml`](../docker-compose.yml) (job `insight-service` in [`docker/prometheus/prometheus.yml`](../docker/prometheus/prometheus.yml)).
+
+| Endpoint               | Purpose                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `/actuator/health`     | Liveness / readiness probe                              |
+| `/actuator/info`       | Application & build information                         |
+| `/actuator/prometheus` | Metrics in Prometheus exposition format (scrape target) |
+
+```bash
+curl http://localhost:8085/actuator/health
+curl http://localhost:8085/actuator/prometheus
+```
+
+Every meter is tagged with `application=insight-service` (`management.metrics.tags.application`), which makes per-service filtering trivial in Grafana — reachable at [http://localhost:3000](http://localhost:3000) (`admin` / `admin`) with the Prometheus datasource already provisioned.
 
 ---
 
@@ -278,9 +322,9 @@ The suite runs **without any external infrastructure** (no Docker, no Usage Serv
 | Test                              | Level       | What it verifies                                                            |
 | --------------------------------- | ----------- | --------------------------------------------------------------------------- |
 | `UsageClientTest`                 | Unit        | URL/params of the Usage Service call, JSON deserialization, 404 / 500 mapping |
-| `InsightServiceTest`              | Unit        | Energy aggregation, prompt content, failure propagation                     |
-| `InsightControllerTest`           | Web slice   | `200` payloads, `400` on a non-numeric `userId`, `500` contract              |
-| `GlobalExceptionHandlerTest`      | Unit        | Error bodies of validation, type mismatch and generic exceptions            |
+| `InsightServiceTest`              | Unit        | Energy aggregation, prompt content, failure propagation, translation of Usage Service / Ollama failures into `DependencyUnavailableException` |
+| `InsightControllerTest`           | Web slice   | `200` payloads, `400` on a non-numeric `userId`, `500` and `503` contracts  |
+| `GlobalExceptionHandlerTest`      | Unit        | Error bodies of validation, type mismatch, dependency unavailable (`503`) and generic exceptions |
 | `ExecutionTimeAspectTest`         | Unit        | Timing advice returns the result and propagates exceptions                  |
 | `LoggingAspectTest`               | Unit        | `@Before` / `@AfterReturning` advice behaviour                              |
 | `OllamaConfigTest`                | Unit        | The `ChatClient` system prompt is configured                                |
@@ -291,7 +335,7 @@ The suite runs **without any external infrastructure** (no Docker, no Usage Serv
 - Spring Boot 4 test slices use `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest` and `org.springframework.test.context.bean.override.mockito.MockitoBean`.
 - `InsightServiceApplicationTests` boots the full Spring context to verify the application wiring.
 
-Current status: **34 tests, 0 failures**.
+Current status: **38 tests, 0 failures**.
 
 ---
 
@@ -303,9 +347,16 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 | ---------------------------------- | ----------- | -------------------------------------------------- |
 | `MethodArgumentNotValidException`  | `400`       | Request body validation failed                     |
 | `MethodArgumentTypeMismatchException` | `400`    | `userId` is not a valid `Long`                     |
-| `Exception` (generic fallback)     | `500`       | Unexpected error (Usage Service / Ollama failure)  |
+| `DependencyUnavailableException`   | `503`       | The Usage Service or the chat model (Ollama) is not reachable |
+| `Exception` (generic fallback)     | `500`       | Unexpected error                                   |
 
-> Failures coming from the **Usage Service** (`RestClientException`) or from the **chat model** are not handled explicitly, so they fall into the generic `500` handler and the response message is `"Unexpected error"`.
+> Failures coming from the **Usage Service** or from the **chat model** (`RestClientException` and its subclasses: connection refused, timeouts, `5xx`) are translated into a `DependencyUnavailableException` by `InsightService` and answered as **`503 Service Unavailable`**, naming the unreachable dependency, for example:
+>
+> ```json
+> { "status": 503, "error": "Service Unavailable", "message": "Ollama is unavailable: Connection refused" }
+> ```
+>
+> ⏱️ Thanks to the retry configuration (`spring.ai.retry.*`, see [Configuration](#-configuration)) a dead Ollama is reported in **~1-2 seconds**. With the Spring AI defaults (10 attempts, exponential backoff of `2s × 5` with no cap: 2s, 10s, 50s, 250s…) the HTTP request **never completes**, so the client hangs instead of receiving an error.
 
 ---
 
@@ -335,6 +386,7 @@ insight-service
 │   │   │   │   ├── InsightDto.java
 │   │   │   │   └── UsageDto.java
 │   │   │   ├── exception
+│   │   │   │   ├── DependencyUnavailableException.java
 │   │   │   │   └── GlobalExceptionHandler.java
 │   │   │   └── service
 │   │   │       └── InsightService.java
@@ -367,7 +419,8 @@ insight-service
 - [ ] Add an Ollama service to the bundled `docker-compose.yml` so the whole platform can be started with a single command.
 - [ ] Make the analysed window configurable (`?days=` query parameter) instead of the hardcoded 3 days.
 - [ ] Stream the model answer with SSE so long generations are not blocked.
-- [ ] Add a timeout / retry / circuit breaker around the `UsageClient` and the chat model calls.
+- [x] Add a timeout / retry / circuit breaker around the `UsageClient` and the chat model calls — the chat model path now fails fast (`spring.ai.retry.*`: 2 attempts, 1s backoff capped at 2s) and answers `503 Service Unavailable`.
+- [ ] Add an explicit connect/read timeout to the `usageRestClient` (`ClientHttpRequestFactory`) so a hung Usage Service cannot block a request either.
 - [ ] Persist the generated insights so they can be listed later and compared over time.
 - [ ] Expose the model and the system prompt as configurable properties.
 - [ ] Add an integration test against a real Ollama instance via Testcontainers.

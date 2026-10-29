@@ -17,6 +17,7 @@ The **User Service** provides a REST API to Create, Read, Update and Delete user
 - [Data Model](#-data-model)
 - [Getting Started](#-getting-started)
 - [Configuration](#-configuration)
+- [Actuator & Metrics](#-actuator--metrics)
 - [Testing](#-testing)
 - [Caching Strategy](#-caching-strategy)
 - [Error Handling](#-error-handling)
@@ -56,6 +57,8 @@ Cache interactions between the Service and Redis use Spring Cache — `@Cacheabl
 | Spring Data JPA     | (SB)       | Persistence / repositories                |
 | Hibernate           | (SB)       | ORM implementation                        |
 | AspectJ (Spring AOP)| (SB)       | Execution timing & method logging         |
+| Spring Boot Actuator| (SB)       | Health, info and metrics endpoints        |
+| Micrometer Prometheus Registry | (SB) | Metrics in Prometheus exposition format  |
 | MySQL               | 8          | Production database                       |
 | H2                  | 2.4.240    | Embedded DB for JPA slice tests           |
 | Redis               | —          | Cache layer (`users` cache)               |
@@ -345,11 +348,33 @@ Configuration lives in `src/main/resources/application.properties`. Sensitive an
 | `SPRING_DATA_REDIS_HOST`                   | `localhost`                                     | Redis host                      |
 | `SPRING_DATA_REDIS_PORT`                   | `6379`                                          | Redis port                      |
 | Cache TTL (`CacheConfig`)                  | `10 minutes`                                    | TTL for entries in the `users` cache |
+| `management.endpoints.web.exposure.include` | `health,info,prometheus`                       | Actuator endpoints exposed      |
+| `management.endpoint.health.show-details`  | `when-authorized`                               | Health detail visibility        |
+| `management.metrics.tags.application`      | `user-service`                                  | Common tag added to all metrics |
 | `SPRINGDOC_SWAGGER_UI_PATH`                | `/swagger-ui.html`                              | Swagger UI path                 |
 | `SPRINGDOC_API_DOCS_PATH`                  | `/v3/api-docs`                                  | OpenAPI spec path               |
 | `logging.level.org.springframework.cache`  | `TRACE`                                         | Cache logging level (dev)       |
 
 The application runs with the `default` (dev) profile. An additional `test` profile is used by the slice tests (H2 in MySQL mode).
+
+---
+
+## 📊 Actuator & Metrics
+
+The service ships **Spring Boot Actuator** and the **Micrometer Prometheus registry**, so its runtime metrics are exposed in Prometheus exposition format and scraped every 15 seconds by the `prometheus` container declared in [`docker-compose.yml`](../docker-compose.yml) (job `user-service` in [`docker/prometheus/prometheus.yml`](../docker/prometheus/prometheus.yml)).
+
+| Endpoint               | Purpose                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `/actuator/health`     | Liveness / readiness probe                              |
+| `/actuator/info`       | Application & build information                         |
+| `/actuator/prometheus` | Metrics in Prometheus exposition format (scrape target) |
+
+```bash
+curl http://localhost:8080/actuator/health
+curl http://localhost:8080/actuator/prometheus
+```
+
+Every meter is tagged with `application=user-service` (`management.metrics.tags.application`), which makes per-service filtering trivial in Grafana — reachable at [http://localhost:3000](http://localhost:3000) (`admin` / `admin`) with the Prometheus datasource already provisioned.
 
 ---
 

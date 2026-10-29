@@ -1,0 +1,24 @@
+# ============================================================
+#  Grafana datasource provisioning
+# ============================================================
+# Declares the Prometheus container as the default datasource, so dashboards
+# work as soon as the stack is up (no manual configuration in the UI).
+#
+# `uid` is pinned on purpose: dashboard JSON files reference their datasource
+# by uid (e.g. {"type":"prometheus","uid":"prometheus"}). Without a pinned uid
+# Grafana would generate a random one per installation and every provisioned
+# dashboard would fail with "Unable to find datasource".
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST

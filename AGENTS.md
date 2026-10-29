@@ -70,9 +70,10 @@ over REST and Apache Kafka, each owning its own data store.
 ENERGY_TRACKER
 ├── AGENTS.md                  # ← this file: global agent/contributor rules
 ├── README.md                  # Parent/platform master documentation (English)
-├── docker-compose.yml         # Unified local infrastructure (MySQL, Redis, Kafka, InfluxDB, Mailpit)
+├── docker-compose.yml         # Unified local infrastructure (MySQL, Redis, Kafka, InfluxDB, Mailpit, Prometheus, Grafana)
 ├── postman.json               # Ready-to-import Postman collection (all services)
-├── docker/                    # Init scripts & bind-mounted data (mysql/init.sql, influxdb_data/, kafka_data/)
+├── docker/                    # Init scripts, bind-mounted data & monitoring config (mysql/init.sql, influxdb_data/,
+│                              #   kafka_data/, keycloak/realms/*.json, prometheus/prometheus.yml, grafana/provisioning/)
 ├── img/                       # Architectural schematics (flowchart.jpg)
 ├── user-service/              # :8080 — README.md + pom.xml + mvnw + src
 ├── device-service/            # :8081 — README.md + pom.xml + mvnw + src
@@ -119,6 +120,9 @@ framework or version unless the user explicitly asks for it.
 | InfluxDB | `2.7` (`influxdb-client-java 6.12.0`) | usage |
 | Apache Kafka | KRaft | infrastructure |
 | Lombok | `1.18.36` | All modules |
+| Spring Boot Actuator | (SB-managed) | all modules (`/actuator/health`, `/actuator/info`, `/actuator/metrics`) |
+| Micrometer Prometheus Registry | (SB-managed) | all modules (`/actuator/prometheus` scrape endpoint) |
+| Prometheus / Grafana | `3.1.0` / `11.4.0` | infrastructure (metrics scraping + dashboards) |
 | H2 | (SB-managed, `test`) | JPA slice tests |
 | Testcontainers | `1.21.3` | integration tests |
 | JUnit 5 / Mockito / AssertJ | (SB-managed) | All modules |
@@ -305,7 +309,11 @@ Do not reinvent these; copy the existing implementations.
   properties (e.g. `usage.service.url`, `device.service.url`, `user.service.url`).
 - **Gateway routing:** one `@Configuration` per service in `api-gateway/route`, each defining the
   route (`RequestPredicates.path(...)` → `uri(...)`) plus a `CircuitBreakerFilterFunctions.circuitBreaker`
-  filter and a `/fallbackRoute` returning `503`.
+  filter and its **own** fallback path `/fallbackRoute/<service>` returning `503`. Never share a
+  single fallback path: only the first registered fallback route resolves it, so every open circuit
+  would answer with the same (wrong) service name. The circuit-breaker filter also applies a
+  `TimeLimiter`; keep `resilience4j.timelimiter.configs.default.timeout-duration` above the slowest
+  downstream call (the insight chat model takes 1-6 s, the Resilience4j default is 1 s).
 
 ---
 
@@ -332,11 +340,13 @@ done
 ### Start local infrastructure
 
 ```bash
-docker compose up -d     # MySQL, Redis, Kafka (+ Kafka UI), InfluxDB, Mailpit
+docker compose up -d     # MySQL, Redis, Kafka (+ Kafka UI), InfluxDB, Mailpit, Keycloak, Prometheus, Grafana
 docker compose down
 ```
 
-Kafka UI → `http://localhost:8070` · InfluxDB → `http://localhost:8072` · Mailpit UI → `http://localhost:8025`.
+Kafka UI → `http://localhost:8070` · InfluxDB → `http://localhost:8072` · Mailpit UI → `http://localhost:8025` ·
+Prometheus → `http://localhost:9090` · Grafana → `http://localhost:3000` (`admin` / `admin`) ·
+Keycloak → `http://localhost:8091` (`admin` / `admin`; realm `het-security-realm` seeded from `docker/keycloak/realms/`).
 
 ### Run a service
 
@@ -392,6 +402,17 @@ Useful context so agents don't "rediscover" these; fix opportunistically and upd
 - **api-gateway** routes `user`, `device`, `ingestion`, `insight` and `usage`, and proxies their five
   OpenAPI specs (`/docs/<service>/v3/api-docs`). **alert-service (:8084)** is intentionally not routed
   or aggregated — it exposes no REST endpoints.
+- **Keycloak** runs in `start-dev` mode on its **embedded H2** database, persisted in the
+  `keycloak-data` volume. Keycloak 24 (Quarkus) **ignores** the legacy `DB_VENDOR` / `DB_ADDR` /
+  `DB_DATABASE` / `DB_USER` / `DB_PASSWORD` variables, so the realm does **not** live in MySQL. The
+  realm is seeded from `docker/keycloak/realms/*.json` with the `IGNORE_EXISTING` strategy: editing
+  those files does **not** change a realm that already exists (delete the realm or the volume first),
+  and any change made in the Admin console must be **re-exported** to stay versioned.
+- **Grafana** datasources are provisioned with a **pinned uid** (`prometheus`), so dashboard JSON files
+  dropped in `docker/grafana/provisioning/dashboards/json/` must reference
+  `{"type":"prometheus","uid":"prometheus"}` — otherwise every panel fails with *"Unable to find
+  datasource"*. The file provider rescans the directory every 30 s, so new or edited dashboards appear
+  without restarting the container.
 - **usage-service** ships a context-load smoke test plus unit tests for its HTTP clients
   (`DeviceClientTest`, `UserClientTest`); the `UsageService` aggregation/threshold logic still has no
   tests — its README roadmap lists the missing unit/slice/E2E tests.

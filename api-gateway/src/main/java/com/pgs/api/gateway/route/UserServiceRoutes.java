@@ -38,7 +38,7 @@ public class UserServiceRoutes {
                 .before(uri("http://localhost:8080"))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "userServiceCircuitBreaker",
-                        URI.create("forward:/fallbackRoute")
+                        URI.create("forward:/fallbackRoute/user")
                 ))
                 .build();
     }
@@ -46,13 +46,17 @@ public class UserServiceRoutes {
     /**
      * Fallback route answered with {@code 503 Service Unavailable} when the user
      * service circuit is open.
+     * <p>
+     * Every service owns its own fallback path ({@code /fallbackRoute/<service>}):
+     * sharing a single {@code /fallbackRoute} made the first registered fallback
+     * answer for all of them, so an open circuit reported the wrong service.
      *
      * @return the fallback router function
      */
     @Bean
     RouterFunction<ServerResponse> userFallbackRoute() {
-        return route("fallbackRoute")
-                .route(RequestPredicates.path("/fallbackRoute"),
+        return route("userFallbackRoute")
+                .route(RequestPredicates.path("/fallbackRoute/user"),
         request-> ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body("User service is down"))
         .build();

@@ -20,6 +20,7 @@ It does **not** decide *when* an alert must be raised: detection logic lives in 
 - [Data Model](#-data-model)
 - [Getting Started](#-getting-started)
 - [Configuration](#-configuration)
+- [Actuator & Metrics](#-actuator--metrics)
 - [API Docs](#-api-docs)
 - [Testing](#-testing)
 - [Project Structure](#-project-structure)
@@ -57,6 +58,8 @@ flowchart LR
 | Spring Data JPA      | (SB)       | Persistence / repositories                 |
 | Hibernate            | (SB)       | ORM implementation                         |
 | AspectJ (Spring AOP) | (SB)       | Aspect-oriented logging / timing           |
+| Spring Boot Actuator | (SB)       | Health, info and metrics endpoints         |
+| Micrometer Prometheus Registry | (SB) | Metrics in Prometheus exposition format |
 | MySQL                | 8          | Production database                        |
 | H2                   | (SB)       | Embedded DB for tests                      |
 | Flyway               | (SB)       | Database migrations                        |
@@ -171,6 +174,9 @@ Paste a JSON event and press Enter; the email appears in the **Mailpit** UI at `
 | `spring.kafka.consumer.group-id`               | `alert-service`                | Consumer group id                        |
 | `spring.datasource.url`                        | `jdbc:mysql://localhost:3306/home_energy_tracker_alert` | Alert database   |
 | `spring.mail.host` / `spring.mail.port`        | `localhost` / `1025`           | SMTP server (Mailpit)                    |
+| `management.endpoints.web.exposure.include`    | `health,info,prometheus`       | Actuator endpoints exposed               |
+| `management.endpoint.health.show-details`      | `when-authorized`              | Health detail visibility                 |
+| `management.metrics.tags.application`          | `alert-service`                | Common tag added to all metrics          |
 | `springdoc.swagger-ui.path`                    | `/swagger-ui.html`             | Swagger UI path                          |
 | `springdoc.api-docs.path`                      | `/v3/api-docs`                 | OpenAPI spec path                        |
 
@@ -184,6 +190,27 @@ The service is a pure Kafka consumer and exposes **no REST endpoints** of its ow
 - OpenAPI spec → `http://localhost:8084/v3/api-docs`
 
 The document is declared in `config/OpenApiConfig.java` (`@OpenAPIDefinition`). No `springdoc.group-configs` entry is registered because there are no REST paths to group; the alerting behaviour is documented as an event flow in the sections above.
+
+---
+
+## 📊 Actuator & Metrics
+
+The service ships **Spring Boot Actuator** and the **Micrometer Prometheus registry**, so its runtime metrics are exposed in Prometheus exposition format and scraped every 15 seconds by the `prometheus` container declared in [`docker-compose.yml`](../docker-compose.yml) (job `alert-service` in [`docker/prometheus/prometheus.yml`](../docker/prometheus/prometheus.yml)).
+
+Because the service is a pure Kafka consumer, actuator is the **only** HTTP surface it exposes — useful to verify that the consumer is alive and to watch throughput/lag-related meters.
+
+| Endpoint               | Purpose                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `/actuator/health`     | Liveness / readiness probe (DB, Kafka, SMTP, disk)       |
+| `/actuator/info`       | Application & build information                         |
+| `/actuator/prometheus` | Metrics in Prometheus exposition format (scrape target) |
+
+```bash
+curl http://localhost:8084/actuator/health
+curl http://localhost:8084/actuator/prometheus
+```
+
+Every meter is tagged with `application=alert-service` (`management.metrics.tags.application`), which makes per-service filtering trivial in Grafana — reachable at [http://localhost:3000](http://localhost:3000) (`admin` / `admin`) with the Prometheus datasource already provisioned.
 
 ---
 

@@ -1,0 +1,18 @@
+{
+  "realm" : "het-security-realm",
+  "users" : [ {
+    "id" : "81897354-8d0c-4991-9a11-4279c3ff156b",
+    "username" : "service-account-home-energy-tracker-client",
+    "emailVerified" : false,
+    "createdTimestamp" : 1793117925426,
+    "enabled" : true,
+    "totp" : false,
+    "serviceAccountClientId" : "home-energy-tracker-client",
+    "credentials" : [ ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-het-security-realm" ],
+    "notBefore" : 0,
+    "groups" : [ ]
+  } ]
+}

@@ -38,7 +38,7 @@ public class IngestionServiceRoutes {
                 .before(uri("http://localhost:8082"))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "ingestionServiceCircuitBreaker",
-                        URI.create("forward:/fallbackRoute")
+                        URI.create("forward:/fallbackRoute/ingestion")
                 ))
                 .build();
     }
@@ -46,13 +46,17 @@ public class IngestionServiceRoutes {
     /**
      * Fallback route answered with {@code 503 Service Unavailable} when the
      * ingestion service circuit is open.
+     * <p>
+     * Every service owns its own fallback path ({@code /fallbackRoute/<service>}):
+     * sharing a single {@code /fallbackRoute} made the first registered fallback
+     * answer for all of them, so an open circuit reported the wrong service.
      *
      * @return the fallback router function
      */
     @Bean
     RouterFunction<ServerResponse> ingestionFallbackRoute() {
-        return route("fallbackRoute")
-                .route(RequestPredicates.path("/fallbackRoute"),
+        return route("ingestionFallbackRoute")
+                .route(RequestPredicates.path("/fallbackRoute/ingestion"),
                         request-> ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
                                 .body("Ingestion service is down"))
                 .build();

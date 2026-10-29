@@ -1,6 +1,6 @@
 # ⚡ Home Energy Tracker — Microservices Platform
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-6DB33F) ![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft-black) ![InfluxDB](https://img.shields.io/badge/InfluxDB-2.7-blue) ![Redis](https://img.shields.io/badge/Redis-7-red) ![MySQL](https://img.shields.io/badge/MySQL-8-informational) ![Docker](https://img.shields.io/badge/Docker-compose-2496ED)
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F) ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-6DB33F) ![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft-black) ![InfluxDB](https://img.shields.io/badge/InfluxDB-2.7-blue) ![Redis](https://img.shields.io/badge/Redis-7-red) ![MySQL](https://img.shields.io/badge/MySQL-8-informational) ![Docker](https://img.shields.io/badge/Docker-compose-2496ED) ![Prometheus](https://img.shields.io/badge/Prometheus-3.1.0-E6522C) ![Grafana](https://img.shields.io/badge/Grafana-11.4.0-F46800)
 
 > Distributed, event-driven home energy tracking ecosystem built with **Spring Boot 4.1.1**, **Apache Kafka**, **InfluxDB**, **Redis**, **MySQL**, and **Spring AI / Ollama**. It enables real-time IoT energy ingestion, high-speed time-series analytics, automated threshold-based alerting via email, and personalized AI saving tips.
 
@@ -12,6 +12,7 @@
 - [Microservices Overview](#-microservices-overview)
 - [Tech Stack](#-tech-stack)
 - [Infrastructure & Auxiliary Services](#-infrastructure--auxiliary-services)
+  - [Keycloak provisioning and persistence](#-keycloak-provisioning-and-persistence)
 - [End-to-End Data Pipelines](#-end-to-end-data-pipelines)
   - [1. Real-time Ingestion & Time-Series Storage](#1-real-time-ingestion--time-series-storage)
   - [2. Threshold-Based Alerting Pipeline](#2-threshold-based-alerting-pipeline)
@@ -95,7 +96,7 @@ flowchart TB
     UsageSvc -->|Flux write API| InfluxTSDB
 
     %% Alerting Pipeline
-    UsageSvc -.->|GET /api/v1/device/user/:id| DeviceSvc
+    UsageSvc -.->|"GET /api/v1/device/user/:id?page&size"| DeviceSvc
     UsageSvc -.->|GET /api/v1/user/:id| UserSvc
     UsageSvc -->|Publish AlertingEvent| TopicAlerts
     TopicAlerts -->|"@KafkaListener"| AlertSvc
@@ -142,6 +143,10 @@ flowchart TB
 | **Security** | Spring Security OAuth2 Resource Server | (Spring Boot) | Edge JWT validation in the API Gateway (`SecurityConfig`) |
 | | Keycloak | 24.0.1 | Identity provider / authorization server issuing the platform's access tokens |
 | | Nimbus JOSE + JWT | (Spring Boot) | JWKS retrieval and JWT signature verification |
+| **Observability** | Spring Boot Actuator | (Spring Boot) | Health/info/metrics endpoints exposed by every microservice |
+| | Micrometer Prometheus Registry | (Spring Boot) | `/actuator/prometheus` exposition format scraped by Prometheus |
+| | Prometheus | 3.1.0 | Metrics scraping & TSDB (15s interval, 5-day retention) |
+| | Grafana | 11.4.0 | Dashboards over the provisioned Prometheus datasource |
 | **Documentation & Tooling** | SpringDoc OpenAPI | 3.1.1 (api-gateway: 3.0.2) | Automated Swagger UI and OpenAPI 3 schema generation (user, device, ingestion, usage, alert, insight) |
 | | Lombok | 1.18.36 | Clean boilerplate reduction for DTOs and models |
 | | Mailpit | Latest | Testing SMTP mock server and web UI for outbound notification emails |
@@ -161,7 +166,43 @@ All supporting infrastructure containers are preconfigured in [`docker-compose.y
 | **Kafka UI** | `kafka-ui` | `8070` | `8080` | Web UI to inspect topics, partitions, consumer groups, and messages |
 | **InfluxDB** | `influxdb` | `8072` | `8086` | Time-series DB (Org: `home-energy-tracker`, Bucket: `usage-bucket`, Token: `my-token`) |
 | **Mailpit** | `mailpit` | `8025` / `1025` | `8025` / `1025` | Web client at `8025`, SMTP listener at `1025` |
-| **Keycloak** | `keycloak` | `8091` | `8080` | Identity provider / authorization server (admin: `admin` / `admin`, realm: `het-security-realm`, client: `home-energy-tracker-client`) |
+| **Keycloak** | `keycloak` | `8091` | `8080` | Identity provider / authorization server (admin: `admin` / `admin`, realm: `het-security-realm`, client: `home-energy-tracker-client`). The realm is seeded from `docker/keycloak/realms/` and its data lives in the `keycloak-data` volume |
+| **Prometheus** | `prometheus` | `9090` | `9090` | Metrics TSDB — scrapes every service's `/actuator/prometheus` every 15s, 5-day retention |
+| **Grafana** | `grafana` | `3000` | `3000` | Dashboards pre-provisioned with the Prometheus datasource (admin: `admin` / `admin`) |
+
+> **Observability:** every service (gateway included) exposes Micrometer metrics on `/actuator/prometheus`. Prometheus reaches them through `host.docker.internal` as declared in [`docker/prometheus/prometheus.yml`](docker/prometheus/prometheus.yml), and Grafana boots with its datasource and dashboard provider already provisioned from [`docker/grafana/provisioning`](docker/grafana/provisioning).
+>
+> The Prometheus datasource is provisioned with the **pinned uid `prometheus`**, so dashboard JSON files must reference it as `{"type":"prometheus","uid":"prometheus"}`. Any dashboard dropped into [`docker/grafana/provisioning/dashboards/json/`](docker/grafana/provisioning/dashboards/json/) is picked up automatically — the file provider rescans the directory every 30 s, so no restart is needed — and lands in the *Home Energy Tracker* folder.
+
+### 🔐 Keycloak provisioning and persistence
+
+The realm is **not** created by hand any more — it is seeded from versioned files:
+
+| File | Content |
+| :--- | :--- |
+| [`docker/keycloak/realms/het-security-realm-realm.json`](docker/keycloak/realms/) | Realm `het-security-realm`: 7 clients (`home-energy-tracker-client` plus the built-ins), roles, client scopes, authentication flows, SMTP settings and the realm's signing keys |
+| `docker/keycloak/realms/het-security-realm-users-0.json` | Realm users (today only the `home-energy-tracker-client` service account) |
+
+Keycloak starts with `start-dev --import-realm`, so on every boot it imports the JSON files found in `/opt/keycloak/data/import` (the bind-mounted `docker/keycloak/realms/`). Its runtime data is kept in an embedded H2 database under `/opt/keycloak/data`, which is stored in the **`keycloak-data` volume** — that is what makes the realm survive the removal of the container.
+
+> ⚠️ The import uses the `IGNORE_EXISTING` strategy: an existing realm is **never overwritten**. Changes made to the JSON files are only applied when the realm does not exist yet (fresh `keycloak-data` volume or a deleted realm).
+
+| Command | Realm survives? |
+| :--- | :---: |
+| `docker compose stop` / `start` / `restart keycloak` | ✅ |
+| `docker compose down` (or `docker compose rm -f keycloak`) | ✅ — thanks to the `keycloak-data` volume |
+| `docker compose down -v` | ❌ — drops every named volume |
+
+**After changing the realm** (new users, clients, roles…) re-export it so the change stays versioned:
+
+```bash
+docker exec keycloak /opt/keycloak/bin/kc.sh export \
+  --dir /opt/keycloak/data/import --realm het-security-realm
+```
+
+The export writes straight into the bind mount, so the JSON files under `docker/keycloak/realms/` are updated on the host and can be committed.
+
+> This is a **local development** setup (`start-dev` + embedded H2). For a production deployment, point Keycloak at MySQL/PostgreSQL with `KC_DB` / `KC_DB_URL` / `KC_DB_USERNAME` / `KC_DB_PASSWORD` instead.
 
 ---
 
@@ -200,9 +241,10 @@ sequenceDiagram
     participant Mailpit as Mailpit SMTP (:1025)
 
     Scheduler->>Influx: Query hourly sum of energyConsumed per device
-    Scheduler->>DeviceSvc: GET /api/v1/device/user/:userId
+    Scheduler->>DeviceSvc: GET /api/v1/device/{deviceId} (resolve the owner)
     Scheduler->>UserSvc: GET /api/v1/user/:userId
     Note over Scheduler: If user.alerting == true AND totalConsumed > threshold:
+    Note over Scheduler: AND no alert was sent for that user within the cooldown<br/>(app.alerting.cooldown-minutes, in-memory state)
     Scheduler->>Kafka: send(AlertingEvent)
     Kafka-->>AlertSvc: @KafkaListener consumes AlertingEvent
     AlertSvc->>Mailpit: Dispatch Email via JavaMailSender
@@ -228,6 +270,8 @@ sequenceDiagram
     Insight-->>User: 200 OK InsightDto {userId, tips, energyUsage}
 ```
 
+> ⚠️ **Ollama is not part of `docker-compose.yml`**: it must be running locally on `:11434` with the configured model already pulled. When it is down, `insight-service` answers **`503 Service Unavailable`** (`"Ollama is unavailable: ..."`) in **~1-2 seconds** instead of hanging, thanks to the `spring.ai.retry.*` configuration.
+
 ---
 
 ## 🔗 Interactive API Docs & Dashboards
@@ -245,8 +289,10 @@ When running locally, each service exposes its Swagger UI documentation and actu
 | **Kafka UI (Kafbat)** | [http://localhost:8070](http://localhost:8070) | Topic browsing, partition lag, message replay |
 | **InfluxDB Dashboard** | [http://localhost:8072](http://localhost:8072) | Data Explorer, Flux queries over `usage-bucket` |
 | **API Gateway** | [http://localhost:9000/swagger-ui.html](http://localhost:9000/swagger-ui.html) | Aggregated specs via `/docs/user-service/v3/api-docs`, `/docs/device-service/v3/api-docs`, `/docs/ingestion-service/v3/api-docs`, `/docs/insight-service/v3/api-docs` and `/docs/usage-service/v3/api-docs` (public) |
-| **Keycloak** | [http://localhost:8091](http://localhost:8091) | Admin console + realm `het-security-realm` (issuer, `jwks_uri`, token endpoint) |
+| **Keycloak** | [http://localhost:8091](http://localhost:8091) | Admin console + realm `het-security-realm` (issuer, `jwks_uri`, token endpoint) — realm seeded from `docker/keycloak/realms/` |
 | **Mailpit UI** | [http://localhost:8025](http://localhost:8025) | Live inbox for alert notifications |
+| **Prometheus** | [http://localhost:9090](http://localhost:9090) | Scrape targets & health, PromQL query explorer (`/-/healthy`, `/api/v1/targets`) |
+| **Grafana** | [http://localhost:3000](http://localhost:3000) | Metrics dashboards (`admin` / `admin`), Prometheus datasource provisioned |
 
 ---
 
@@ -269,7 +315,7 @@ From the root repository directory:
 docker compose up -d
 ```
 
-Verify that all containers (`mysql`, `redis`, `kafka`, `kafka-ui`, `influxdb`, `mailpit`, `keycloak`) are healthy:
+Verify that all containers (`mysql`, `redis`, `kafka`, `kafka-ui`, `influxdb`, `mailpit`, `keycloak`, `prometheus`, `grafana`) are healthy:
 
 ```bash
 docker compose ps
@@ -388,7 +434,7 @@ A preconfigured Postman collection is available in the root repository: [`postma
    - **Usage Service**: Query aggregated device energy consumption over custom day ranges.
    - **Insight Service**: Request personalized AI energy saving tips and consumption overviews.
 
-> Collection variables are preconfigured for local development (`gatewayBaseUrl` `:9000`, `keycloakBaseUrl` `:8091`, realm `het-security-realm`, client `home-energy-tracker-client`). Set `username` / `password` to a real realm user before requesting a token.
+> Collection variables are preconfigured for local development (`gatewayBaseUrl` `:9000`, `keycloakBaseUrl` `:8091`, realm `het-security-realm`, client `home-energy-tracker-client`). The seeded realm contains **no end users yet**, so create one in the Admin console first and set `username` / `password` before requesting a token — then re-export the realm (see [Keycloak provisioning and persistence](#-keycloak-provisioning-and-persistence)) so the user stays versioned.
 
 ---
 
@@ -422,9 +468,11 @@ done
 
 ```
 ENERGY_TRACKER
-├── docker/                           # Database and service initialization scripts
+├── docker/                           # Database, identity and monitoring configuration
 │   ├── mysql/init.sql
-│   ├── keycloak/realms/              # Keycloak realm import files
+│   ├── keycloak/realms/              # Keycloak realm import/export files (het-security-realm)
+│   ├── prometheus/prometheus.yml     # Scrape configuration for the microservices
+│   ├── grafana/provisioning/         # Grafana datasource + dashboard provider
 │   ├── influxdb_data/
 │   └── kafka_data/
 ├── img/                              # Architectural schematics

@@ -1,5 +1,7 @@
 package com.pgs.usage.service.service;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -7,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +17,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 
 import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.domain.WritePrecision;
@@ -37,8 +41,9 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * It consumes energy usage events from Kafka, stores them in InfluxDB,
  * periodically aggregates device energy consumption, checks thresholds for
- * users, and sends alerts when exceeded. It also provides a method to retrieve
- * aggregated usage for a user over a specified number of days.
+ * users, and sends alerts when exceeded (rate-limited by a per-user cooldown).
+ * It also provides a method to retrieve aggregated usage for a user over a
+ * specified number of days.
  */
 @Service
 @Slf4j
@@ -59,12 +64,26 @@ public class UsageService {
 	private final DeviceClient deviceClient;
 	private final UserClient userClient;
 	private final KafkaTemplate<String, AlertingEvent> kafkaTemplate;
+	private final Clock clock;
 
 	@Value("${influx.bucket}")
 	private String influxBucket;
 
 	@Value("${influx.org}")
 	private String influxOrg;
+
+	@Value("${app.alerting.cooldown-minutes:60}")
+	private long alertCooldownMinutes;
+
+	/**
+	 * Timestamp of the last alert published per user, used to apply the alert
+	 * cooldown and avoid flooding the {@code energy-alerts} topic (and therefore
+	 * the mailbox) while a user keeps consuming above their threshold.
+	 * <p>
+	 * The state is kept <strong>in memory</strong>: it is lost when the service
+	 * restarts and it is not shared between instances of the service.
+	 */
+	private final Map<Long, Instant> lastAlertSentAt = new ConcurrentHashMap<>();
 
 	// ------------------------------------------------------------------
 	// Kafka listener: persist incoming readings
@@ -103,11 +122,17 @@ public class UsageService {
 	 * Scheduled task that runs every 10 seconds to aggregate device energy usage
 	 * over the past hour, group it by user, and send alerts to Kafka for users
 	 * whose aggregated consumption exceeds their configured threshold.
+	 * <p>
+	 * Alerts are subject to the per-user cooldown configured through
+	 * {@code app.alerting.cooldown-minutes}, so a user that stays above their
+	 * threshold does not produce a new event (and email) on every execution.
 	 */
 	@Scheduled(cron = "*/10 * * * * *")
 	public void aggregateDeviceEnergyUsage() {
-		final Instant now = Instant.now();
+		final Instant now = Instant.now(clock);
 		final Instant oneHourAgo = now.minusSeconds(ONE_HOUR_IN_SECONDS);
+
+		pruneExpiredAlertCooldowns(now);
 
 		final List<DeviceEnergy> deviceEnergies = queryDeviceEnergies(oneHourAgo, now);
 		log.debug("Aggregated device energies over the past hour: {}", deviceEnergies);
@@ -200,6 +225,11 @@ public class UsageService {
 	/**
 	 * Fetches a user from the User Service, returning an empty optional when the
 	 * user does not exist, has alerting disabled, or the remote call fails.
+	 * <p>
+	 * A {@code 404 Not Found} is treated as an expected situation (the user was
+	 * deleted while its devices and their readings still exist) and is logged at
+	 * {@code debug} level without a stack trace; any other failure is logged at
+	 * {@code warn} with the exception attached.
 	 *
 	 * @param userId the user id to resolve
 	 * @return the alerting-enabled user, or {@link Optional#empty()} otherwise
@@ -216,6 +246,9 @@ public class UsageService {
 				return Optional.empty();
 			}
 			return Optional.of(user);
+		} catch (HttpClientErrorException.NotFound e) {
+			log.debug("User with ID {} no longer exists; skipping alert evaluation for it", userId);
+			return Optional.empty();
 		} catch (Exception e) {
 			log.warn("Failed to fetch user for ID: {}", userId, e);
 			return Optional.empty();
@@ -240,6 +273,15 @@ public class UsageService {
 	/**
 	 * Checks one user's aggregated consumption against their threshold and sends
 	 * an {@link AlertingEvent} when exceeded.
+	 * <p>
+	 * A user that stays above the threshold is not alerted again until the cooldown
+	 * configured through {@code app.alerting.cooldown-minutes} has elapsed, which
+	 * prevents a burst of events (and emails) while the scheduled task keeps
+	 * running every 10 seconds.
+	 *
+	 * @param userId  the user id
+	 * @param user    the alerting-enabled user with their threshold
+	 * @param devices the user's aggregated consumption per device
 	 */
 	private void checkThresholdAndAlert(Long userId, UserDto user, List<DeviceEnergy> devices) {
 		if (devices == null || devices.isEmpty()) {
@@ -257,6 +299,11 @@ public class UsageService {
 			return;
 		}
 
+		final Instant now = Instant.now(clock);
+		if (isWithinAlertCooldown(userId, now)) {
+			return;
+		}
+
 		log.info("ALERT: User ID {} exceeded threshold. consumption={}, threshold={}",
 				userId, totalConsumption, threshold);
 
@@ -268,6 +315,42 @@ public class UsageService {
 				.email(user.email())
 				.build();
 		kafkaTemplate.send(TOPIC_ENERGY_ALERTS, alert);
+		lastAlertSentAt.put(userId, now);
+	}
+
+	/**
+	 * Indicates whether the cooldown for a user is still active, that is, whether an
+	 * alert was already published for that user less than
+	 * {@code app.alerting.cooldown-minutes} ago.
+	 *
+	 * @param userId the user id
+	 * @param now    the current instant
+	 * @return {@code true} when the alert must be suppressed by the cooldown
+	 */
+	private boolean isWithinAlertCooldown(Long userId, Instant now) {
+		final Instant lastAlert = lastAlertSentAt.get(userId);
+		if (lastAlert == null) {
+			return false;
+		}
+
+		final Instant cooldownEnd = lastAlert.plus(Duration.ofMinutes(alertCooldownMinutes));
+		if (now.isBefore(cooldownEnd)) {
+			log.debug("Alert for user {} suppressed by the {}-minute cooldown (last alert at {})",
+					userId, alertCooldownMinutes, lastAlert);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Removes the cooldown entries that have already expired, so the map only keeps
+	 * one entry per user that is currently under cooldown.
+	 *
+	 * @param now the current instant
+	 */
+	private void pruneExpiredAlertCooldowns(Instant now) {
+		lastAlertSentAt.entrySet().removeIf(
+				entry -> !now.isBefore(entry.getValue().plus(Duration.ofMinutes(alertCooldownMinutes))));
 	}
 
 	// ------------------------------------------------------------------

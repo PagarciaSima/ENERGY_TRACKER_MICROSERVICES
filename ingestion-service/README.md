@@ -17,6 +17,7 @@ The **Ingestion Service** exposes a single REST endpoint that receives energy us
 - [Data Model](#-data-model)
 - [Getting Started](#-getting-started)
 - [Configuration](#-configuration)
+- [Actuator & Metrics](#-actuator--metrics)
 - [Testing](#-testing)
 - [Async Publishing Strategy](#-async-publishing-strategy)
 - [Data Simulation](#-data-simulation)
@@ -54,6 +55,8 @@ Publishing is **fire-and-forget**: `send` returns immediately once the message i
 | Spring WebMVC       | (SB)       | REST controller                          |
 | Spring for Kafka    | (SB)       | Kafka producer (`KafkaTemplate`)         |
 | AspectJ (Spring AOP)| (SB)       | Aspect-oriented logging / timing          |
+| Spring Boot Actuator| (SB)       | Health, info and metrics endpoints        |
+| Micrometer Prometheus Registry | (SB) | Metrics in Prometheus exposition format  |
 | Apache Kafka        | KRaft      | Message broker (local infra via docker)   |
 | jackson-datatype-jsr310 | —       | `Instant` / time API serialization        |
 | SpringDoc OpenAPI   | 3.1.1      | Swagger UI / API documentation            |
@@ -175,11 +178,32 @@ Configuration lives in `src/main/resources/application.properties`. Sensitive an
 | `simulation.interval-ms`                      | `60000`                                          | Interval (ms) between batches   |
 | `simulation.parallel-threads`                 | `10`                                             | Threads used by the parallel simulator |
 | `management.endpoints.web.exposure.include`   | `health,info,prometheus`                        | Actuator endpoints exposed      |
+| `management.endpoint.health.show-details`     | `when-authorized`                               | Health detail visibility        |
+| `management.metrics.tags.application`         | `ingestion-service`                             | Common tag added to all metrics |
 | `springdoc.swagger-ui.path`                   | `/swagger-ui.html`                              | Swagger UI path                 |
 | `springdoc.api-docs.path`                     | `/v3/api-docs`                                  | OpenAPI spec path               |
 | `springdoc.group-configs[0].group`             | `ingestion`                                     | OpenAPI group for the ingestion endpoint |
 
 The application runs with the `default` (dev) profile and exposes health/info/Prometheus metrics via Spring Actuator.
+
+---
+
+## 📊 Actuator & Metrics
+
+The service ships **Spring Boot Actuator** and the **Micrometer Prometheus registry**, so its runtime metrics are exposed in Prometheus exposition format and scraped every 15 seconds by the `prometheus` container declared in [`docker-compose.yml`](../docker-compose.yml) (job `ingestion-service` in [`docker/prometheus/prometheus.yml`](../docker/prometheus/prometheus.yml)).
+
+| Endpoint               | Purpose                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `/actuator/health`     | Liveness / readiness probe                              |
+| `/actuator/info`       | Application & build information                         |
+| `/actuator/prometheus` | Metrics in Prometheus exposition format (scrape target) |
+
+```bash
+curl http://localhost:8082/actuator/health
+curl http://localhost:8082/actuator/prometheus
+```
+
+Every meter is tagged with `application=ingestion-service` (`management.metrics.tags.application`), which makes per-service filtering trivial in Grafana — reachable at [http://localhost:3000](http://localhost:3000) (`admin` / `admin`) with the Prometheus datasource already provisioned.
 
 ---
 

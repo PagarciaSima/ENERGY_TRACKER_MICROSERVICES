@@ -36,6 +36,9 @@ class DeviceClientTest {
 
     private static final String BASE_URL = "http://device-service:8081/api/v1/device";
 
+    /** Page size injected into the client, matching {@code device.service.page-size}. */
+    private static final int PAGE_SIZE = 100;
+
     private MockRestServiceServer server;
     private DeviceClient deviceClient;
 
@@ -43,7 +46,7 @@ class DeviceClientTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        deviceClient = new DeviceClient(builder.baseUrl(BASE_URL).build());
+        deviceClient = new DeviceClient(builder.baseUrl(BASE_URL).build(), PAGE_SIZE);
     }
 
     @Nested
@@ -121,41 +124,63 @@ class DeviceClientTest {
     class GetAllDevicesForUser {
 
         @Test
-        @DisplayName("returns the list of devices on 200")
-        void returnsListOfDevicesOn200() {
+        @DisplayName("returns the devices of a single page on 200")
+        void returnsDevicesOfSinglePageOn200() {
             String json = """
-                    [
-                      {"id":1,"name":"Bulb","type":"LIGHT","location":"Salon","userId":7},
-                      {"id":2,"name":"Thermostat","type":"CLIMATE","location":"Cocina","userId":7}
-                    ]
+                    {
+                      "content": [
+                        {"id":1,"name":"Bulb","type":"LIGHT","location":"Salon","userId":7},
+                        {"id":2,"name":"Thermostat","type":"THERMOSTAT","location":"Cocina","userId":7}
+                      ],
+                      "page": 0,
+                      "size": 100,
+                      "totalElements": 2,
+                      "totalPages": 1,
+                      "last": true,
+                      "first": true,
+                      "empty": false
+                    }
                     """;
-            server.expect(requestTo(BASE_URL + "/user/7"))
+            server.expect(requestTo(BASE_URL + "/user/7?page=0&size=100"))
+                    .andExpect(method(HttpMethod.GET))
                     .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
 
             List<DeviceDto> devices = deviceClient.getAllDevicesForUser(7L);
 
             assertThat(devices).hasSize(2);
             assertThat(devices.get(0).id()).isEqualTo(1L);
+            assertThat(devices.get(0).name()).isEqualTo("Bulb");
+            assertThat(devices.get(0).userId()).isEqualTo(7L);
             assertThat(devices.get(1).id()).isEqualTo(2L);
             server.verify();
         }
 
         @Test
-        @DisplayName("performs a GET request to {baseUrl}/user/{userId}")
-        void performsGetRequestToUserUrl() {
-            server.expect(requestTo(BASE_URL + "/user/7"))
-                    .andExpect(method(HttpMethod.GET))
-                    .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        @DisplayName("walks every page until last is true")
+        void walksEveryPageUntilLastIsTrue() {
+            server.expect(requestTo(BASE_URL + "/user/7?page=0&size=100"))
+                    .andRespond(withSuccess("""
+                            {"content":[{"id":1,"userId":7},{"id":2,"userId":7}],
+                             "page":0,"size":100,"totalElements":3,"totalPages":2,
+                             "last":false,"first":true,"empty":false}
+                            """, MediaType.APPLICATION_JSON));
+            server.expect(requestTo(BASE_URL + "/user/7?page=1&size=100"))
+                    .andRespond(withSuccess("""
+                            {"content":[{"id":3,"userId":7}],
+                             "page":1,"size":100,"totalElements":3,"totalPages":2,
+                             "last":true,"first":false,"empty":false}
+                            """, MediaType.APPLICATION_JSON));
 
-            deviceClient.getAllDevicesForUser(7L);
+            List<DeviceDto> devices = deviceClient.getAllDevicesForUser(7L);
 
+            assertThat(devices).extracting(DeviceDto::id).containsExactly(1L, 2L, 3L);
             server.verify();
         }
 
         @Test
         @DisplayName("throws HttpClientErrorException.NotFound on 404")
         void throwsNotFoundOn404ForUserDevices() {
-            server.expect(requestTo(BASE_URL + "/user/7"))
+            server.expect(requestTo(BASE_URL + "/user/7?page=0&size=100"))
                     .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
             assertThatThrownBy(() -> deviceClient.getAllDevicesForUser(7L))
@@ -164,9 +189,22 @@ class DeviceClientTest {
         }
 
         @Test
+        @DisplayName("returns an empty list when the page has no content")
+        void returnsEmptyListWhenContentIsEmpty() {
+            server.expect(requestTo(BASE_URL + "/user/7?page=0&size=100"))
+                    .andRespond(withSuccess("""
+                            {"content":[],"page":0,"size":100,"totalElements":0,"totalPages":0,
+                             "last":true,"first":true,"empty":true}
+                            """, MediaType.APPLICATION_JSON));
+
+            assertThat(deviceClient.getAllDevicesForUser(7L)).isEmpty();
+            server.verify();
+        }
+
+        @Test
         @DisplayName("returns an empty list when the response body is empty")
         void returnsEmptyListWhenBodyEmpty() {
-            server.expect(requestTo(BASE_URL + "/user/7"))
+            server.expect(requestTo(BASE_URL + "/user/7?page=0&size=100"))
                     .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
 
             assertThat(deviceClient.getAllDevicesForUser(7L)).isEmpty();

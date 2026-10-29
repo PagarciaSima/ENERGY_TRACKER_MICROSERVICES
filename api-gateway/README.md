@@ -46,14 +46,14 @@ flowchart LR
     end
 
     GW -.->|"verifies signature via JWKS"| KC
-    GW -.->|CircuitBreaker open| Fallback["/fallbackRoute -> 503"]
+    GW -.->|CircuitBreaker open| Fallback["/fallbackRoute/<service> -> 503"]
     GW -.->|"missing / invalid token"| Denied["401 Unauthorized"]
 ```
 
 Each route class defines up to three beans:
 
 - the **route** itself (`path predicate → uri(...)` + circuit breaker filter);
-- a **fallback route** returning `503 Service Unavailable`;
+- a **fallback route** per service (`/fallbackRoute/<service>`) returning `503 Service Unavailable` with its own message;
 - for the user, device, ingestion, insight and usage services, an **API docs route** that proxies the OpenAPI spec.
 
 Cross-cutting security lives in a separate configuration class, `config/SecurityConfig.java` (see [Security](#-security-keycloak--oauth2)), and the OpenAPI metadata for the gateway itself is declared in `config/OpenApiConfig.java`. Two aspects add cross-cutting tracing: `aspect/LoggingAspect.java` (invocation/return of route and config methods) and `aspect/ExecutionTimeAspect.java` (timing of the route beans).
@@ -184,17 +184,23 @@ The gateway listens on port **`9000`** and matches the following path predicates
 | `/api/v1/ingestion/**`    | Ingestion Service (`:8082`)| `http://localhost:8082`    | `ingestionServiceCircuitBreaker` | 🔒 Bearer JWT |
 | `/api/v1/insight/**`      | Insight Service (`:8085`)  | `http://localhost:8085`    | `insightServiceCircuitBreaker`   | 🔒 Bearer JWT |
 | `/api/v1/usage/**`        | Usage Service (`:8083`)    | `http://localhost:8083`    | `usageServiceCircuitBreaker`     | 🔒 Bearer JWT |
-| `/fallbackRoute`          | — (internal)               | responds `503`             | —                                | —             |
+| `/fallbackRoute/user`      | — (internal)               | responds `503`             | —                                | 🔒 Bearer JWT |
+| `/fallbackRoute/device`    | — (internal)               | responds `503`             | —                                | 🔒 Bearer JWT |
+| `/fallbackRoute/ingestion` | — (internal)               | responds `503`             | —                                | 🔒 Bearer JWT |
+| `/fallbackRoute/insight`   | — (internal)               | responds `503`             | —                                | 🔒 Bearer JWT |
+| `/fallbackRoute/usage`     | — (internal)               | responds `503`             | —                                | 🔒 Bearer JWT |
 
 > All routed paths require a valid Keycloak JWT: requests without one are rejected with `401 Unauthorized` before the route predicate is evaluated (see [Security](#-security-keycloak--oauth2)).
 
-When the circuit for a route is open, the request is forwarded to `/fallbackRoute`, which returns:
+When the circuit for a route is open, the request is forwarded to the fallback path of **that** service (`/fallbackRoute/<service>`), which returns its own message:
 
 ```http
 HTTP/1.1 503 Service Unavailable
 
 <User|Device|Ingestion|Insight|Usage> service is down
 ```
+
+> ⚠️ Each service owns its fallback path. They used to share a single `/fallbackRoute` and, since only the first registered fallback route resolves a path, **any** open circuit answered `"Device service is down"` — a call to insight reported the wrong service. `ServiceFallbackRoutesTest` locks the behaviour in place.
 
 ---
 
@@ -232,6 +238,16 @@ Circuit breakers are configured globally in `application.properties` under `resi
 
 Each breaker also registers a health indicator (`registerHealthIndicator=true`), so its state is visible under `/actuator/health` and `/actuator/circuitbreakers`.
 
+### ⏱️ Time limiter
+
+The circuit-breaker filter also wraps every routed call in a `TimeLimiter`. Resilience4j's default timeout is **1 second**, which is shorter than a chat-model call, so it must be raised:
+
+| Property                                                    | Value | Meaning                                                                                  |
+| ----------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `resilience4j.timelimiter.configs.default.timeout-duration`  | `30s` | Maximum time a routed call may take before it is cancelled and counted as a failure       |
+
+> Without this, every call to `/api/v1/insight/**` (1-6 s) was cancelled at 1 s, recorded as a failure and answered with the fallback `503`, so the route could never return `200`.
+
 ---
 
 ## 🚀 Getting Started
@@ -240,7 +256,7 @@ Each breaker also registers a health indicator (`registerHealthIndicator=true`),
 
 - Java 21 and the bundled Maven Wrapper (`mvnw`).
 - The downstream services running on their respective ports (see the platform [README](../README.md)).
-- **Keycloak** running on `http://localhost:8091` with the `het-security-realm` realm and the `home-energy-tracker-client` client — started together with the rest of the local infrastructure via `docker compose up -d` from the repository root.
+- **Keycloak** running on `http://localhost:8091` with the `het-security-realm` realm and the `home-energy-tracker-client` client — started together with the rest of the local infrastructure via `docker compose up -d` from the repository root. The realm and the client are **seeded from `docker/keycloak/realms/`** on every Keycloak boot, and its data is persisted in the `keycloak-data` volume (see [Keycloak provisioning and persistence](../README.md#-keycloak-provisioning-and-persistence)).
 - A valid access token for the calls you want to make (see [Getting a Token](#-getting-a-token)).
 
 ### Run the gateway
@@ -287,6 +303,7 @@ Key properties from `src/main/resources/application.properties`:
 | `management.endpoints.web.exposure.include`         | `health,info,metrics,circuitbreakers,prometheus` | Exposed actuator endpoints       |
 | `management.metrics.tags.application`               | `${spring.application.name}` | Tag attached to every exported metric     |
 | `resilience4j.circuitbreaker.configs.default.*`     | see table above        | Default circuit breaker tuning                  |
+| `resilience4j.timelimiter.configs.default.timeout-duration` | `30s`          | Maximum duration of a routed call before it is cancelled (see [Time limiter](#️-time-limiter)) |
 | `keycloak.auth.jwk-set-uri`                         | `http://localhost:8091/realms/het-security-realm/protocol/openid-connect/certs` | JWKS endpoint used by the `JwtDecoder` |
 | `spring.security.oauth2.resourceserver.jwt.issuer-uri` | `http://localhost:8091/realms/het-security-realm` | Expected token issuer (`iss`)      |
 | `security.excluded.urls`                            | `/actuator/**, /swagger-ui.html, /swagger-ui/**, /docs/**, /v3/api-docs/**, /swagger-resources/**, /api-docs/**` | Paths that bypass authentication |
@@ -326,13 +343,16 @@ cd api-gateway
 .\mvnw.cmd test      # Windows
 ```
 
-| Test                          | Level       | What it verifies                     |
-| ----------------------------- | ----------- | ------------------------------------ |
-| `ApiGatewayApplicationTests`  | Smoke       | The Spring application context loads |
+| Test                          | Level       | What it verifies                                  |
+| ----------------------------- | ----------- | ------------------------------------------------- |
+| `ApiGatewayApplicationTests`  | Smoke       | The Spring application context loads              |
+| `ServiceFallbackRoutesTest`   | Unit (MVC)  | Every fallback answers `503` with **its own** message on **its own** path, and the legacy shared `/fallbackRoute` is no longer registered |
 
-The suite runs **without external infrastructure** — no downstream service, broker or database is required (the JWKS keys are fetched lazily, so Keycloak does not need to be running just to load the context).
+The suite runs **without external infrastructure** — no downstream service, broker or database is required (the JWKS keys are fetched lazily, so Keycloak does not need to be running just to load the context). `ServiceFallbackRoutesTest` drives the router functions through `MockMvcBuilders.routerFunctions(...)`, so it needs neither a server nor Keycloak.
 
-> Security behaviour (`401` / `403`, public paths, circuit-breaker fallback) is **not** covered by tests yet — see the [Roadmap](#-roadmap).
+Current status: **7 tests, 0 failures**.
+
+> Security behaviour (`401` / `403`, public paths) and the circuit-breaker *open → fallback* flow with a real downstream failure are **not** covered by tests yet — see the [Roadmap](#-roadmap).
 
 ---
 
@@ -345,6 +365,7 @@ The gateway does not raise domain errors itself; it forwards the downstream serv
 | Missing, invalid or expired JWT               | `401 Unauthorized` (produced by Spring Security)     |
 | Authenticated but not authorised              | `403 Forbidden` (no role/scope rules are configured yet) |
 | Circuit open / downstream unavailable         | `503 Service Unavailable` — `"<Service> service is down"` |
+| Downstream call slower than the time limiter   | `503 Service Unavailable` — the call is cancelled, counted as a failure and answered with the fallback (`resilience4j.timelimiter.configs.default.timeout-duration`, `30s`) |
 | No matching route                             | `404 Not Found` (no route registered)               |
 
 The `503` fallback body is a plain-text string (not the shared `ErrorResponse` JSON contract), because it is produced by the gateway, not by a downstream service. `401` and `403` responses are produced by Spring Security before the request reaches a route, so they also do not use the shared `ErrorResponse` contract.
@@ -391,8 +412,9 @@ api-gateway
 - [ ] Fix the `spring.security.oauth2.resourceserver.jwt,issuer-uri` typo (comma → dot) and validate the `iss` claim in the `JwtDecoder`.
 - [ ] Trim the leading space in `security.excluded.urls` so the `/actuator/**` pattern matches as intended.
 - [ ] Add role/scope-based authorisation rules (`hasAuthority` / `hasRole`) instead of "authenticated or public".
-- [ ] Commit the realm import (`docker/keycloak/realms/het-security-realm.json`) so `--import-realm` provisions the realm automatically.
+- [x] Commit the realm import (`docker/keycloak/realms/het-security-realm-realm.json` + `-users-0.json`) so `--import-realm` provisions the realm automatically.
 - [ ] Add security tests (401 without a token, 200 with a mocked JWT, public actuator/docs paths).
-- [ ] Add integration tests that assert routing and circuit-breaker fallback behaviour (e.g. WireMock / `MockWebServer`).
+- [x] Add tests that assert circuit-breaker fallback behaviour: `ServiceFallbackRoutesTest` drives the five router functions with `MockMvcBuilders.routerFunctions(...)`.
+- [ ] Add integration tests that assert the full routing + *open circuit* flow against a stubbed downstream service (e.g. WireMock / `MockWebServer`).
 - [ ] Introduce service discovery (Eureka / Kubernetes) instead of fixed `localhost` URIs.
 - [ ] Add a global rate limiter and request/response logging filter.

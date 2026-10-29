@@ -1,0 +1,3 @@
+# Carpeta de capturas del guion de pruebas manuales.
+# Convención: fase<NN>-<nn>-<tema>.png  (ver plan.md §0)
+# Los archivos .png se añadirán al recorrer el plan de pruebas.

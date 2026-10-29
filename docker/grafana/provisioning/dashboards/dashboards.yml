@@ -1,0 +1,21 @@
+# ============================================================
+#  Grafana dashboard provider provisioning
+# ============================================================
+# Loads every dashboard JSON stored next to this file into the
+# "Home Energy Tracker" folder. Only .json files are read by the provider,
+# so this file is ignored while scanning.
+
+apiVersion: 1
+
+providers:
+  - name: 'Home Energy Tracker'
+    orgId: 1
+    folder: 'Home Energy Tracker'
+    folderUid: 'het'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

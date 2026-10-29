@@ -38,20 +38,24 @@ public class DeviceServiceRoutes {
                 .before(uri("http://localhost:8081"))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "deviceServiceCircuitBreaker",
-                        URI.create("forward:/fallbackRoute")))
+                        URI.create("forward:/fallbackRoute/device")))
                 .build();
     }
 
     /**
      * Fallback route answered with {@code 503 Service Unavailable} when the device
      * service circuit is open.
+     * <p>
+     * Every service owns its own fallback path ({@code /fallbackRoute/<service>}):
+     * sharing a single {@code /fallbackRoute} made the first registered fallback
+     * answer for all of them, so an open circuit reported the wrong service.
      *
      * @return the fallback router function
      */
     @Bean
     RouterFunction<ServerResponse> deviceFallbackRoute() {
-        return route("fallbackRoute")
-                .route(RequestPredicates.path("/fallbackRoute"),
+        return route("deviceFallbackRoute")
+                .route(RequestPredicates.path("/fallbackRoute/device"),
                         request-> ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
                                 .body("Device service is down"))
                 .build();

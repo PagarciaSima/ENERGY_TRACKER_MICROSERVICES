@@ -38,7 +38,7 @@ public class InsightServiceRoutes {
                 .before(uri("http://localhost:8085"))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "insightServiceCircuitBreaker",
-                        URI.create("forward:/fallbackRoute")
+                        URI.create("forward:/fallbackRoute/insight")
                 ))
                 .build();
     }
@@ -46,13 +46,17 @@ public class InsightServiceRoutes {
     /**
      * Fallback route answered with {@code 503 Service Unavailable} when the insight
      * service circuit is open.
+     * <p>
+     * Every service owns its own fallback path ({@code /fallbackRoute/<service>}):
+     * sharing a single {@code /fallbackRoute} made the first registered fallback
+     * answer for all of them, so an open circuit reported the wrong service.
      *
      * @return the fallback router function
      */
     @Bean
     RouterFunction<ServerResponse> insightFallbackRoute() {
-        return route("fallbackRoute")
-                .route(RequestPredicates.path("/fallbackRoute"),
+        return route("insightFallbackRoute")
+                .route(RequestPredicates.path("/fallbackRoute/insight"),
                         request-> ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
                                 .body("Insight service is down"))
                 .build();

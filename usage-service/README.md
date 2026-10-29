@@ -18,6 +18,7 @@ The **Usage Service** is the analytical heart of the platform. It consumes raw e
 - [How Alerting Works](#-how-alerting-works)
 - [Getting Started](#-getting-started)
 - [Configuration](#-configuration)
+- [Actuator & Metrics](#-actuator--metrics)
 - [Testing](#-testing)
 - [Error Handling](#-error-handling)
 - [Project Structure](#-project-structure)
@@ -66,6 +67,8 @@ Readings persist as InfluxDB points in the `energy_usage` measurement. Aggregate
 | InfluxDB              | 2.7        | Time-series storage of energy readings    |
 | influxdb-client-java  | 6.12.0     | Write / query InfluxDB (Flux)             |
 | AspectJ (Spring AOP)  | (SB)       | Aspect-oriented logging / timing          |
+| Spring Boot Actuator  | (SB)       | Health, info and metrics endpoints        |
+| Micrometer Prometheus Registry | (SB) | Metrics in Prometheus exposition format |
 | RestClient            | (SB)       | HTTP clients to Device / User services    |
 | jackson-datatype-jsr310 | —        | `Instant` / time API serialization        |
 | SpringDoc OpenAPI     | 3.1.1      | Swagger UI / API documentation            |
@@ -165,12 +168,17 @@ This service has **no relational database**. Its data lives in two places:
 A `@Scheduled(cron = "*/10 * * * * *")` task (enabled via `@EnableScheduling`) runs every 10 seconds and:
 
 1. Queries InfluxDB for the sum of `energyConsumed` per device over the **past hour**.
-2. Enriches each device with its owner via the **Device Service** (`GET /api/v1/device/user/{userId}`).
+2. Resolves the owner of each device through the **Device Service** (`GET /api/v1/device/{deviceId}`); for the usage query it walks the **paginated** `GET /api/v1/device/user/{userId}?page&size` endpoint, reading the `content` of every page until `last` is `true`.
 3. Groups consumption per user and fetches the matching users from the **User Service**.
 4. **Only users with `alerting = true` are considered** (the flag is managed in the User Service).
 5. If a user's total consumption exceeds their `energyAlertingThreshold`, an `AlertingEvent` is published to `energy-alerts`.
+6. **Cooldown:** an alert is published for a user at most once every `app.alerting.cooldown-minutes` (default `60`), so a user that stays above their threshold does not produce a new event — and a new email — on every execution of the task.
 
 The threshold and the on/off switch are configured per user in the **User Service** (`POST /api/v1/user`, `PATCH /api/v1/user/{id}/alerting`), so no alert configuration lives in this service.
+
+> ⚠️ **The cooldown state lives in memory** (one timestamp per user), so it is **lost when the service restarts** and it is **not shared between instances**. After a restart one alert per user still above their threshold may be re-sent.
+>
+> 💡 A **user deleted while its devices (and their readings) still exist** makes the User Service answer `404`. That is an expected situation: the user is skipped and logged at `debug` level, without a stack trace and without affecting the rest of the aggregation.
 
 ---
 
@@ -220,11 +228,36 @@ InfluxDB is initialised on first run with:
 | `influx.bucket`                            | `usage-bucket`                            | InfluxDB bucket                          |
 | `device.service.url`                       | `http://localhost:8081/api/v1/device`     | Device Service base URL                  |
 | `user.service.url`                         | `http://localhost:8080/api/v1/user`       | User Service base URL                    |
+| `device.service.page-size`                 | `100`                                     | Page size used while walking the paginated Device Service endpoints |
+| `app.alerting.cooldown-minutes`            | `60`                                      | Minimum minutes between two alerts for the same user (state kept in memory) |
+| `management.endpoints.web.exposure.include` | `health,info,prometheus`                  | Actuator endpoints exposed               |
+| `management.endpoint.health.show-details`  | `when-authorized`                          | Health detail visibility                 |
+| `management.metrics.tags.application`      | `usage-service`                            | Common tag added to all metrics          |
 | `springdoc.swagger-ui.path`                | `/swagger-ui.html`                        | Swagger UI path                          |
 | `springdoc.api-docs.path`                  | `/v3/api-docs`                            | OpenAPI spec path                        |
 | `springdoc.group-configs[0].group`          | `usage`                                   | OpenAPI group for the usage endpoints    |
 
 ---
+
+## 📊 Actuator & Metrics
+
+The service ships **Spring Boot Actuator** and the **Micrometer Prometheus registry**, so its runtime metrics are exposed in Prometheus exposition format and scraped every 15 seconds by the `prometheus` container declared in [`docker-compose.yml`](../docker-compose.yml) (job `usage-service` in [`docker/prometheus/prometheus.yml`](../docker/prometheus/prometheus.yml)).
+
+| Endpoint               | Purpose                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `/actuator/health`     | Liveness / readiness probe                              |
+| `/actuator/info`       | Application & build information                         |
+| `/actuator/prometheus` | Metrics in Prometheus exposition format (scrape target) |
+
+```bash
+curl http://localhost:8083/actuator/health
+curl http://localhost:8083/actuator/prometheus
+```
+
+Every meter is tagged with `application=usage-service` (`management.metrics.tags.application`), which makes per-service filtering trivial in Grafana — reachable at [http://localhost:3000](http://localhost:3000) (`admin` / `admin`) with the Prometheus datasource already provisioned.
+
+---
+
 ## 🧪 Testing
 
 The suite runs **without external infrastructure** (no Docker / Kafka / InfluxDB required): the Spring context smoke test uses the test configuration, and the HTTP clients are unit-tested against a mocked `RestServer`.
@@ -240,10 +273,11 @@ cd usage-service
 | Test                             | Level       | What it verifies                                       |
 | -------------------------------- | ----------- | ------------------------------------------------------ |
 | `UsageServiceApplicationTests`   | Smoke       | The Spring application context loads                   |
-| `DeviceClientTest`               | Unit        | `DeviceClient` maps device responses / handles errors  |
+| `DeviceClientTest`               | Unit        | `DeviceClient` walks the paginated `PageResponse` of the Device Service page by page, maps devices and handles errors |
 | `UserClientTest`                 | Unit        | `UserClient` maps user responses / handles errors      |
+| `UsageServiceTest`               | Unit (Mockito) | Aggregation query, threshold evaluation, deleted users (`404`), per-user alert cooldown and the Kafka listener write path |
 
-> Aggregation, threshold checks and the Kafka listener are **not** covered yet — see the [Roadmap](#-roadmap).
+> The scheduled aggregation, the threshold checks, the alert cooldown and the Kafka listener are covered by `UsageServiceTest` with mocked collaborators (a controllable `Clock` drives the cooldown tests). A `WebMvcTest` for `UsageController` and a full E2E test with real Kafka + InfluxDB are still pending — see the [Roadmap](#-roadmap).
 
 ---
 
@@ -257,6 +291,8 @@ Errors are centralized in `GlobalExceptionHandler` (`@RestControllerAdvice`). Al
 | `HandlerMethodValidationException`           | `400`       | Method/param validation         |
 | `MethodArgumentNotValidException`            | `400`       | Malformed / unreadable body     |
 | `Exception` (generic fallback)               | `500`       | Unexpected error                 |
+
+> 🔎 **Downstream errors:** a `404` from the User Service for a user that still has devices and readings (a deleted user) is **not** an error of this service: the user is skipped during the aggregation and logged at `debug` level. Connectivity problems or `5xx` responses from the Device/User services are logged at `warn` and the affected user/device is skipped, so one unreachable service never aborts the whole aggregation.
 
 ---
 
@@ -280,6 +316,7 @@ usage-service
 │   │   │       │   ├── DeviceClient.java
 │   │   │       │   └── UserClient.java
 │   │   │       ├── config
+│   │   │       │   ├── ClockConfig.java
 │   │   │       │   ├── InfluxDBConfig.java
 │   │   │       │   ├── OpenApiConfig.java
 │   │   │       │   └── RestClientConfig.java
@@ -288,6 +325,7 @@ usage-service
 │   │   │       ├── dto
 │   │   │       │   ├── DeviceDto.java
 │   │   │       │   ├── ErrorResponse.java
+│   │   │       │   ├── PageResponse.java
 │   │   │       │   ├── UsageDto.java
 │   │   │       │   └── UserDto.java
 │   │   │       ├── exception
@@ -302,16 +340,20 @@ usage-service
 │   └── test
 │       └── java/com/pgs/usage/service
 │           ├── UsageServiceApplicationTests.java
-│           └── client
-│               ├── DeviceClientTest.java
-│               └── UserClientTest.java
+│           ├── client
+│           │   ├── DeviceClientTest.java
+│           │   └── UserClientTest.java
+│           └── service
+│               └── UsageServiceTest.java
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Add unit tests for `UsageService` (Kafka listener, aggregation, threshold checks) using mocks.
+- [x] Add unit tests for `UsageService` (Kafka listener, aggregation, threshold checks) using mocks.
+- [ ] Persist the alert cooldown (Redis or a Kafka state store) so it survives restarts and is shared between instances — today it is an in-memory map.
+- [ ] Cascade the deletion of a user's devices (and their InfluxDB readings) when the user is removed, instead of leaving orphan devices/measurements that keep being aggregated.
 - [ ] Add a `WebMvcTest` for `UsageController` covering validation and error responses.
 - [ ] Add an E2E test with a real Kafka + InfluxDB via Testcontainers.
 - [ ] Add an outbox / durable source of truth for alert events to avoid loss if Kafka is down.

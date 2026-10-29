@@ -84,7 +84,18 @@ public class InsightController {
                     description = "Internal Server Error",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class)))
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(
+                    responseCode = "503",
+                    description = "The Usage Service or the AI model (Ollama) is not reachable",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "dependencyUnavailable",
+                                    summary = "Example unavailable dependency response",
+                                    value = "{\"status\": 503, \"error\": \"Service Unavailable\", "
+                                            + "\"message\": \"Ollama is unavailable: Connection refused\"}")))
     })
     @GetMapping("/saving-tips/{userId}")
     public ResponseEntity<InsightDto> getSavingTips(
@@ -140,7 +151,18 @@ public class InsightController {
                     description = "Internal Server Error",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = ErrorResponse.class)))
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(
+                    responseCode = "503",
+                    description = "The Usage Service or the AI model (Ollama) is not reachable",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "dependencyUnavailable",
+                                    summary = "Example unavailable dependency response",
+                                    value = "{\"status\": 503, \"error\": \"Service Unavailable\", "
+                                            + "\"message\": \"Ollama is unavailable: Connection refused\"}")))
     })
     @GetMapping("/overview/{userId}")
     public ResponseEntity<InsightDto> getOverview(

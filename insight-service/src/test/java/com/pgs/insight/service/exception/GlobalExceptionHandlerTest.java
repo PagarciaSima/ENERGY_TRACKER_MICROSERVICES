@@ -58,6 +58,11 @@ class GlobalExceptionHandlerTest {
 			throw new IllegalStateException("boom");
 		}
 
+		@GetMapping("/trigger/dependency-unavailable")
+		public void dependencyUnavailable() {
+			throw new DependencyUnavailableException("Ollama", "Connection refused");
+		}
+
 		/**
 		 * Builds a {@link MethodArgumentNotValidException} (the exact type produced
 		 * by {@code @Valid} on MVC request bodies) carrying a binding result with
@@ -133,6 +138,25 @@ class GlobalExceptionHandlerTest {
 					.andExpect(jsonPath("$.status").value(500))
 					.andExpect(jsonPath("$.error").value("Internal Server Error"))
 					.andExpect(jsonPath("$.message").value("Unexpected error"));
+		}
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  DependencyUnavailableException -> 503 Service Unavailable         */
+	/* ------------------------------------------------------------------ */
+
+	@Nested
+	@DisplayName("DependencyUnavailableException")
+	class DependencyUnavailable {
+
+		@Test
+		@DisplayName("maps to service unavailable reporting the dependency name")
+		void mapsToServiceUnavailableReportingTheDependency() throws Exception {
+			mockMvc.perform(get("/trigger/dependency-unavailable"))
+					.andExpect(status().isServiceUnavailable())
+					.andExpect(jsonPath("$.status").value(503))
+					.andExpect(jsonPath("$.error").value("Service Unavailable"))
+					.andExpect(jsonPath("$.message").value("Ollama is unavailable: Connection refused"));
 		}
 	}
 }

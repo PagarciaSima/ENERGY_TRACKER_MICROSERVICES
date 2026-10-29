@@ -104,6 +104,15 @@
 	        <groupId>org.springframework.boot</groupId>
 	        <artifactId>spring-boot-starter-aspectj</artifactId>
 	    </dependency>
+		<!-- Observability: Actuator endpoints + Prometheus metrics registry -->
+		<dependency>
+	        <groupId>org.springframework.boot</groupId>
+	        <artifactId>spring-boot-starter-actuator</artifactId>
+	    </dependency>
+		<dependency>
+	        <groupId>io.micrometer</groupId>
+	        <artifactId>micrometer-registry-prometheus</artifactId>
+	    </dependency>
 
 	    <!-- OpenAPI / Swagger UI: publishes the service metadata and API docs -->
 	    <dependency>

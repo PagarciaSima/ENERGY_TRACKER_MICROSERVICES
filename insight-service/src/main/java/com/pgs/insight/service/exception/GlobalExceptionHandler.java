@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.pgs.insight.service.dto.ErrorResponse;
+import com.pgs.insight.service.exception.DependencyUnavailableException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -70,6 +71,29 @@ public class GlobalExceptionHandler {
                         .status(HttpStatus.BAD_REQUEST.value())
                         .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
                         .message(msg)
+                        .build());
+    }
+
+    /**
+     * Handles failures of the downstream dependencies of this service: the Usage
+     * Service (usage data) and the Ollama chat model (reasoning).
+     * <p>
+     * A dependency being down is not a bug of this service, so the response is a
+     * {@code 503 Service Unavailable} carrying the name of the unreachable
+     * dependency, instead of the generic {@code 500}.
+     *
+     * @param ex the exception describing the unavailable dependency
+     * @return a {@code 503 Service Unavailable} response with the dependency name
+     */
+    @ExceptionHandler(DependencyUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleDependencyUnavailable(DependencyUnavailableException ex) {
+        log.error("Downstream dependency unavailable: {}", ex.getMessage(), ex);
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.builder()
+                        .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                        .error(HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase())
+                        .message(ex.getMessage())
                         .build());
     }
 
