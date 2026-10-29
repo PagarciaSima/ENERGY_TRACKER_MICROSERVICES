@@ -11,6 +11,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Data transfer object that carries device data between the API layer and the
+ * service layer.
+ */
 @Schema(description = "Device data transfer object")
 @Data
 @NoArgsConstructor

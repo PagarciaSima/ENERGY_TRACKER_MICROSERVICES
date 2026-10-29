@@ -15,6 +15,12 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
+/**
+ * Cache configuration for the User Service.
+ * <p>
+ * Enables Spring Cache and declares the Redis-backed cache manager used to
+ * cache user read operations (see the {@code users} cache name).
+ */
 @Configuration
 @EnableCaching
 public class CacheConfig {

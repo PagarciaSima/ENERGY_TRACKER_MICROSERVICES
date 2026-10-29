@@ -19,11 +19,22 @@ import com.pgs.ingestion.service.dto.EnergyUsageDto;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Load simulator that posts energy usage readings to the ingestion endpoint in
+ * parallel, using a pool of {@code simulation.parallel-threads} worker threads.
+ * <p>
+ * The batch produced on each interval ({@code simulation.requests-per-interval})
+ * is split evenly across the workers and dispatched through an executor. The pool
+ * is shut down when the application context is destroyed.
+ */
 @Slf4j
 @Component
 public class ParallelDataSimulator implements CommandLineRunner {
 
+    /** HTTP client used to post the simulated readings to the ingestion endpoint. */
     private final RestClient restClient = RestClient.create();
+
+    /** Random source used to generate the simulated readings. */
     private final Random random = new Random();
 
     @Value("${simulation.parallel-threads}")
@@ -37,16 +48,31 @@ public class ParallelDataSimulator implements CommandLineRunner {
 
     private final ExecutorService executorService;
 
+    /**
+     * Creates the simulator and initializes the cached thread pool used to dispatch
+     * the simulated requests in parallel.
+     */
     public ParallelDataSimulator() {
         this.executorService = Executors.newCachedThreadPool();
     }
 
+    /**
+     * Callback executed once the application context has started. Sizes the pool
+     * core threads from the {@code simulation.parallel-threads} property.
+     *
+     * @param args command-line arguments passed to the application
+     * @throws Exception if the runner fails during startup
+     */
     @Override
     public void run(String... args) throws Exception {
         log.info("ParallelDataSimulator started...");
         ((ThreadPoolExecutor)executorService).setCorePoolSize(parallelThreads);
     }
 
+    /**
+     * Splits the configured batch across the worker threads and submits the
+     * simulated energy usage readings to the ingestion endpoint.
+     */
     @Scheduled(fixedRateString = "${simulation.interval-ms}")
     public void sendMockData() {
         int batchSize = requestsPerInterval / parallelThreads;
@@ -78,6 +104,10 @@ public class ParallelDataSimulator implements CommandLineRunner {
         }
     }
 
+    /**
+     * Shuts the thread pool down gracefully when the application context is
+     * destroyed.
+     */
     @PreDestroy
     public void shutdown() {
         executorService.shutdown();

@@ -51,6 +51,7 @@ flowchart TB
         UsageSvc["Usage Service (:8083)"]
         AlertSvc["Alert Service (:8084)"]
         InsightSvc["Insight Service (:8085)"]
+        ApiGW["API Gateway (:9000)"]
     end
 
     subgraph KafkaCluster["Event Broker (Apache Kafka KRaft)"]
@@ -73,11 +74,13 @@ flowchart TB
     end
 
     %% Client Interactions
-    UserClient -->|REST /api/v1/user| UserSvc
-    UserClient -->|REST /api/v1/device| DeviceSvc
-    UserClient -->|REST /api/v1/usage| UsageSvc
-    UserClient -->|REST /api/v1/insight| InsightSvc
+    UserClient -->|"REST via :9000"| ApiGW
+    UserClient -->|"REST /api/v1/usage (direct)"| UsageSvc
     IoTDevice -->|POST /api/v1/ingestion| IngestionSvc
+    ApiGW -->|"/api/v1/user/**"| UserSvc
+    ApiGW -->|"/api/v1/device/**"| DeviceSvc
+    ApiGW -->|"/api/v1/ingestion/**"| IngestionSvc
+    ApiGW -->|"/api/v1/insight/**"| InsightSvc
 
     %% Service to Storage
     UserSvc --> MySQLUser
@@ -116,6 +119,7 @@ flowchart TB
 | **[Usage Service](usage-service/README.md)** | `8083` | InfluxDB | Kafka & HTTP | Consumes readings, writes to InfluxDB time-series, aggregates consumption, queries user/device limits, and triggers alert events. | [Read README](usage-service/README.md) |
 | **[Alert Service](alert-service/README.md)** | `8084` | MySQL | Kafka &rarr; SMTP | Consumes alert events, formats notification emails, dispatches them via SMTP to Mailpit, and stores audit history with dead-letter fallback. | [Read README](alert-service/README.md) |
 | **[Insight Service](insight-service/README.md)** | `8085` | Stateless | REST &rarr; Ollama | Pulls aggregated usage data from Usage Service and orchestrates prompts with local Ollama LLMs for personalized energy-saving recommendations. | [Read README](insight-service/README.md) |
+| **[API Gateway](api-gateway/README.md)** | `9000` | Stateless | REST &rarr; REST | Single entry point and security edge for clients. Validates the Keycloak JWT (OAuth2 Resource Server), routes requests to the downstream services and wraps every route in a Resilience4j circuit breaker with a `503` fallback. | [Read README](api-gateway/README.md) |
 
 ---
 
@@ -135,7 +139,10 @@ flowchart TB
 | | Flyway | (Spring Boot) | Database schema migrations and versioning |
 | **Artificial Intelligence** | Spring AI | 2.0.1 | ChatModel abstraction, prompt orchestration, and context injection |
 | | Ollama | Local runtime | Local host LLM provider executing `deepseek-coder` |
-| **Documentation & Tooling** | SpringDoc OpenAPI | 3.1.1 | Automated Swagger UI and OpenAPI 3 schema generation |
+| **Security** | Spring Security OAuth2 Resource Server | (Spring Boot) | Edge JWT validation in the API Gateway (`SecurityConfig`) |
+| | Keycloak | 24.0.1 | Identity provider / authorization server issuing the platform's access tokens |
+| | Nimbus JOSE + JWT | (Spring Boot) | JWKS retrieval and JWT signature verification |
+| **Documentation & Tooling** | SpringDoc OpenAPI | 3.1.1 (api-gateway: 3.0.2) | Automated Swagger UI and OpenAPI 3 schema generation (user, device, ingestion, usage, alert, insight) |
 | | Lombok | 1.18.36 | Clean boilerplate reduction for DTOs and models |
 | | Mailpit | Latest | Testing SMTP mock server and web UI for outbound notification emails |
 | | Testcontainers | 1.21.3 | Automated integration tests against real Dockerized dependencies |
@@ -154,6 +161,7 @@ All supporting infrastructure containers are preconfigured in [`docker-compose.y
 | **Kafka UI** | `kafka-ui` | `8070` | `8080` | Web UI to inspect topics, partitions, consumer groups, and messages |
 | **InfluxDB** | `influxdb` | `8072` | `8086` | Time-series DB (Org: `home-energy-tracker`, Bucket: `usage-bucket`, Token: `my-token`) |
 | **Mailpit** | `mailpit` | `8025` / `1025` | `8025` / `1025` | Web client at `8025`, SMTP listener at `1025` |
+| **Keycloak** | `keycloak` | `8091` | `8080` | Identity provider / authorization server (admin: `admin` / `admin`, realm: `het-security-realm`, client: `home-energy-tracker-client`) |
 
 ---
 
@@ -236,6 +244,8 @@ When running locally, each service exposes its Swagger UI documentation and actu
 | **Insight Service** | [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html) | `GET /api/v1/insight/saving-tips/{userId}`, `GET /overview/{userId}` |
 | **Kafka UI (Kafbat)** | [http://localhost:8070](http://localhost:8070) | Topic browsing, partition lag, message replay |
 | **InfluxDB Dashboard** | [http://localhost:8072](http://localhost:8072) | Data Explorer, Flux queries over `usage-bucket` |
+| **API Gateway** | [http://localhost:9000/swagger-ui.html](http://localhost:9000/swagger-ui.html) | Aggregated specs via `/docs/user-service/v3/api-docs`, `/docs/device-service/v3/api-docs`, `/docs/ingestion-service/v3/api-docs`, `/docs/insight-service/v3/api-docs` and `/docs/usage-service/v3/api-docs` (public) |
+| **Keycloak** | [http://localhost:8091](http://localhost:8091) | Admin console + realm `het-security-realm` (issuer, `jwks_uri`, token endpoint) |
 | **Mailpit UI** | [http://localhost:8025](http://localhost:8025) | Live inbox for alert notifications |
 
 ---
@@ -259,7 +269,7 @@ From the root repository directory:
 docker compose up -d
 ```
 
-Verify that all containers (`mysql`, `redis`, `kafka`, `kafka-ui`, `influxdb`, `mailpit`) are healthy:
+Verify that all containers (`mysql`, `redis`, `kafka`, `kafka-ui`, `influxdb`, `mailpit`, `keycloak`) are healthy:
 
 ```bash
 docker compose ps
@@ -315,6 +325,36 @@ Recommended startup order:
    ```bash
    cd insight-service && mvn spring-boot:run
    ```
+7. **API Gateway** (Port `9000`):
+   ```bash
+   cd api-gateway && mvn spring-boot:run
+   ```
+8. **Keycloak** (Port `8091`): started automatically by `docker compose` — no additional command is needed.
+
+> Once the gateway is up, clients can reach the routed services through a single port (`http://localhost:9000/api/v1/...`) instead of calling each service's port directly.
+
+#### Obtain an access token (required by the gateway)
+
+The gateway validates a Bearer JWT on every routed path. Tokens are issued by Keycloak (realm `het-security-realm`, client `home-energy-tracker-client`):
+
+```bash
+TOKEN=$(curl -s -X POST \
+  http://localhost:8091/realms/het-security-realm/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password" \
+  -d "client_id=home-energy-tracker-client" \
+  -d "client_secret=KHe2IG9JY8uWoSqi8l2gbm5GOLXkVewm" \
+  -d "username=<realm-user>" \
+  -d "password=<realm-password>" | jq -r '.access_token')
+```
+
+Then call the gateway with that token:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:9000/api/v1/user/1
+```
+
+> The `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**` and `/docs/**` paths remain **public**. See the [API Gateway README](api-gateway/README.md#-security-keycloak--oauth2) for the complete security model.
 
 ---
 
@@ -340,11 +380,15 @@ A preconfigured Postman collection is available in the root repository: [`postma
 1. Open **Postman** and click **Import**.
 2. Select [`postman.json`](postman.json) from the repository root.
 3. The collection contains grouped folders covering:
+   - **Security (Keycloak)**: Obtain a JWT access token (password grant, client credentials, refresh) and inspect the realm's OpenID discovery document. The password-grant request stores the token in the `accessToken` collection variable, which every other request inherits as a Bearer token.
+   - **API Gateway (routed, Bearer JWT)**: Exercise the routed endpoints through `http://localhost:9000/api/v1/...` with the Bearer token, including a circuit-breaker `503` fallback demo.
    - **User Service**: Create users, list paginated, search by threshold, toggle alerting.
    - **Device Service**: Register devices, assign to users, filter by type (`LIGHT`, `HVAC`, etc.).
    - **Ingestion Service**: Submit single and bulk telemetry readings.
    - **Usage Service**: Query aggregated device energy consumption over custom day ranges.
    - **Insight Service**: Request personalized AI energy saving tips and consumption overviews.
+
+> Collection variables are preconfigured for local development (`gatewayBaseUrl` `:9000`, `keycloakBaseUrl` `:8091`, realm `het-security-realm`, client `home-energy-tracker-client`). Set `username` / `password` to a real realm user before requesting a token.
 
 ---
 
@@ -361,10 +405,15 @@ flowchart TD
     Unit --> Slice --> Integration
 ```
 
-Run test suites per module:
+Run test suites per module (there is no root aggregator POM, so run Maven inside each service folder):
 ```bash
-# Run unit & slice tests for all microservices from root:
-mvn test
+# From a single service folder:
+cd user-service && mvn test
+
+# Or loop over every service from the repository root:
+for d in user-service device-service ingestion-service usage-service alert-service insight-service api-gateway; do
+  (cd "$d" && mvn -q test) || echo "FAILED: $d"
+done
 ```
 
 ---
@@ -375,6 +424,7 @@ mvn test
 ENERGY_TRACKER
 ├── docker/                           # Database and service initialization scripts
 │   ├── mysql/init.sql
+│   ├── keycloak/realms/              # Keycloak realm import files
 │   ├── influxdb_data/
 │   └── kafka_data/
 ├── img/                              # Architectural schematics
@@ -385,6 +435,7 @@ ENERGY_TRACKER
 ├── usage-service/                    # Time-series analytics & alert evaluator (:8083)
 ├── alert-service/                    # Email notification & audit log consumer (:8084)
 ├── insight-service/                  # AI recommendations using Ollama (:8085)
+├── api-gateway/                      # Single entry point + JWT auth + circuit breakers (:9000)
 ├── docker-compose.yml                # Unified infrastructure definition
 ├── postman.json                      # Ready-to-import Postman test collection
 └── README.md                         # Platform master documentation

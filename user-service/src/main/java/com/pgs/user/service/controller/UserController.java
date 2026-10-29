@@ -55,6 +55,13 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Creates a new user.
+	 *
+	 * @param userDto the user data to create
+	 * @return the created user with HTTP 201
+	 * @throws UserAlreadyExistsException if the email is already registered
+	 */
 	@Operation(summary = "Create a user", description = "Creates a new user and returns the stored record including the auto-generated id.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "201", description = "User created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserDto.class))),
@@ -72,6 +79,11 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Retrieves every stored user without pagination.
+	 *
+	 * @return the list of all users with HTTP 200
+	 */
 	@Operation(summary = "List all users", description = "Returns every stored user without pagination.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "List of users", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = UserDto.class)), examples = @ExampleObject(name = "usersList", value = "[{\"id\": 1, \"name\": \"Ana\", \"surname\": \"García\", \"email\": \"ana.garcia@example.com\", \"address\": \"Calle Mayor 5, Madrid\", \"alerting\": true, \"energyAlertingThreshold\": 3200.5}]"))),
@@ -86,6 +98,13 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Retrieves a page of users.
+	 *
+	 * @param page the page index (zero-based)
+	 * @param size the page size
+	 * @return a page of users with HTTP 200
+	 */
 	@Operation(summary = "List users (paginated)", description = "Returns a page of users using the PageResponse wrapper.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "A page of users", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PageResponse.class), examples = @ExampleObject(name = "usersPage", value = "{\"content\": [{\"id\": 1, \"name\": \"Ana\", \"surname\": \"García\", \"email\": \"ana.garcia@example.com\", \"address\": \"Calle Mayor 5, Madrid\", \"alerting\": true, \"energyAlertingThreshold\": 3200.5}], \"page\": 0, \"size\": 10, \"totalElements\": 1, \"totalPages\": 1, \"last\": true, \"first\": true, \"empty\": false}"))),
@@ -103,6 +122,14 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Searches users applying the optional filters and pagination.
+	 *
+	 * @param filter the optional filter criteria
+	 * @param page   the page index (zero-based)
+	 * @param size   the page size
+	 * @return a page of matching users with HTTP 200
+	 */
 	@Operation(summary = "Search users by filters", description = "Searches users applying the optional filters and returns a paginated result. "
 			+ "Optional filter query params: name, surname, email, address (fragments), "
 			+ "alerting (boolean), minEnergyAlertingThreshold (number).")
@@ -122,6 +149,13 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Retrieves a user by id.
+	 *
+	 * @param id the user id
+	 * @return the requested user with HTTP 200
+	 * @throws UserNotFoundException if the user does not exist
+	 */
 	@Operation(summary = "Get a user by id", description = "Returns the user with the given id, or a 404 error body when it does not exist.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "The requested user", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserDto.class))),
@@ -138,6 +172,15 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Replaces the data of an existing user.
+	 *
+	 * @param id      the user id
+	 * @param userDto the updated user data
+	 * @return the updated user with HTTP 200
+	 * @throws UserNotFoundException      if the user does not exist
+	 * @throws UserAlreadyExistsException if the new email is already registered
+	 */
 	@Operation(summary = "Update a user", description = "Replaces the data of the user with the given id and returns the updated record.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "User updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserDto.class))),
@@ -155,6 +198,14 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Enables or disables energy alerting for a user.
+	 *
+	 * @param id      the user id
+	 * @param enabled whether energy alerting should be enabled
+	 * @return the updated user with HTTP 200
+	 * @throws UserNotFoundException if the user does not exist
+	 */
 	@Operation(summary = "Enable or disable alerting for a user",
 			description = "Updates only the alerting flag of the user with the given id and returns the updated record.")
 	@ApiResponses({
@@ -175,6 +226,13 @@ public class UserController {
 	 * ============================================================
 	 */
 
+	/**
+	 * Deletes a user by id.
+	 *
+	 * @param id the user id
+	 * @return HTTP 204 with no content on success
+	 * @throws UserNotFoundException if the user does not exist
+	 */
 	@Operation(summary = "Delete a user", description = "Deletes the user with the given id. Returns 204 on success, "
 			+ "or a 404 error body when the user does not exist.")
 	@ApiResponses({ @ApiResponse(responseCode = "204", description = "User deleted, no content"),

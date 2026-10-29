@@ -21,6 +21,10 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class ExecutionTimeAspect {
 
+    /**
+     * Pointcut matching all methods of every class in the
+     * {@code com.pgs.alert.service.service} package.
+     */
     @Pointcut("execution(* com.pgs.alert.service.service.*.*(..))")
     public void serviceMethods() {
     }

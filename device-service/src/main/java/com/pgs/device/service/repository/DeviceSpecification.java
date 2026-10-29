@@ -10,6 +10,9 @@ import com.pgs.device.service.model.DeviceType;
  */
 public final class DeviceSpecification {
 
+    /**
+     * Private constructor: this class only exposes static factory methods.
+     */
     private DeviceSpecification() {
     }
 
@@ -63,6 +66,12 @@ public final class DeviceSpecification {
                 : cb.equal(root.get("userId"), userId);
     }
 
+    /**
+     * Checks whether the given value is null or contains only whitespace.
+     *
+     * @param value the value to check
+     * @return {@code true} if the value is null or blank
+     */
     /**
      * Checks whether the given value is null or contains only whitespace.
      *

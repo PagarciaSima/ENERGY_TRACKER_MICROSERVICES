@@ -161,6 +161,13 @@ public class UsageService {
 		}
 	}
 
+	/**
+	 * Fetches a device from the Device Service, returning an empty optional when the
+	 * device does not exist or the remote call fails.
+	 *
+	 * @param deviceId the device id to resolve
+	 * @return the device, or {@link Optional#empty()} if it cannot be resolved
+	 */
 	private Optional<DeviceDto> findDevice(Long deviceId) {
 		try {
 			final DeviceDto device = deviceClient.getDeviceById(deviceId);
@@ -190,6 +197,13 @@ public class UsageService {
 		return result;
 	}
 
+	/**
+	 * Fetches a user from the User Service, returning an empty optional when the
+	 * user does not exist, has alerting disabled, or the remote call fails.
+	 *
+	 * @param userId the user id to resolve
+	 * @return the alerting-enabled user, or {@link Optional#empty()} otherwise
+	 */
 	private Optional<UserDto> findUser(Long userId) {
 		try {
 			final UserDto user = userClient.getUserById(userId);
@@ -208,6 +222,13 @@ public class UsageService {
 		}
 	}
 
+	/**
+	 * Evaluates the threshold for every alerting-enabled user and publishes an alert
+	 * event for each one that has exceeded it.
+	 *
+	 * @param userDeviceEnergyMap the aggregated consumption grouped by user id
+	 * @param alertingUsers       the alerting-enabled users indexed by user id
+	 */
 	private void checkThresholdsAndSendAlerts(Map<Long, List<DeviceEnergy>> userDeviceEnergyMap,
 			Map<Long, UserDto> alertingUsers) {
 
@@ -283,10 +304,25 @@ public class UsageService {
 		return UsageDto.builder().userId(userId).devices(resultDevices).build();
 	}
 
+	/**
+	 * Resolves the aggregated consumption of a device, defaulting to zero when the
+	 * device has no id or no aggregated data.
+	 *
+	 * @param dto         the device
+	 * @param aggregated  the aggregated consumption indexed by device id
+	 * @return the aggregated consumption of the device
+	 */
 	private static double consumptionOf(DeviceDto dto, Map<Long, Double> aggregated) {
 		return dto.id() == null ? 0.0 : aggregated.getOrDefault(dto.id(), 0.0);
 	}
 
+	/**
+	 * Copies a device DTO attaching the aggregated energy consumption to it.
+	 *
+	 * @param dto            the device to copy
+	 * @param energyConsumed the aggregated energy consumption to attach
+	 * @return a copy of the device with the consumption populated
+	 */
 	private static DeviceDto copyWithConsumption(DeviceDto dto, double energyConsumed) {
 		return DeviceDto.builder()
 				.id(dto.id())
@@ -346,6 +382,13 @@ public class UsageService {
 		}
 	}
 
+	/**
+	 * Builds the Flux filter expression that restricts the query to the given device
+	 * ids, joining the predicates with {@code or}.
+	 *
+	 * @param deviceIds the device ids to include in the filter
+	 * @return the Flux filter predicate expression
+	 */
 	private static String buildDeviceFilter(List<String> deviceIds) {
 		return deviceIds.stream()
 				.map(id -> String.format("r[\"%s\"] == \"%s\"", TAG_DEVICE_ID, id))
@@ -369,6 +412,13 @@ public class UsageService {
 				.collect(Collectors.toCollection(ArrayList::new));
 	}
 
+	/**
+	 * Parses a single Flux record into a {@link DeviceEnergy}, returning an empty
+	 * optional when the device id is missing or cannot be parsed.
+	 *
+	 * @param record the Flux record to parse
+	 * @return the parsed device energy, or {@link Optional#empty()} if it is invalid
+	 */
 	private Optional<DeviceEnergy> parseDeviceEnergy(FluxRecord record) {
 		final Object deviceIdObj = record.getValueByKey(TAG_DEVICE_ID);
 		if (deviceIdObj == null) {
@@ -386,6 +436,13 @@ public class UsageService {
 		}
 	}
 
+	/**
+	 * Converts a Flux value into a {@code double}, returning zero for non-numeric or
+	 * missing values.
+	 *
+	 * @param value the raw Flux value
+	 * @return the value as a double, or {@code 0.0} if it is not a number
+	 */
 	private static double toDouble(Object value) {
 		return value instanceof Number number ? number.doubleValue() : 0.0;
 	}

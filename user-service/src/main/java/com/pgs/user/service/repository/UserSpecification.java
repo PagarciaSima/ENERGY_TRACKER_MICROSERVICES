@@ -9,6 +9,9 @@ import com.pgs.user.service.entity.User;
  */
 public final class UserSpecification {
 
+    /**
+     * Private constructor: this class only exposes static factory methods.
+     */
     private UserSpecification() {
     }
 
@@ -84,6 +87,12 @@ public final class UserSpecification {
                 : cb.greaterThanOrEqualTo(root.get("energyAlertingThreshold"), threshold);
     }
 
+    /**
+     * Checks whether the given value is null or contains only whitespace.
+     *
+     * @param value the value to check
+     * @return {@code true} if the value is null or blank
+     */
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

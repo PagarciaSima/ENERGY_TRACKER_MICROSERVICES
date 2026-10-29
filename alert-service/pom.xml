@@ -105,6 +105,13 @@
 	        <artifactId>spring-boot-starter-aspectj</artifactId>
 	    </dependency>
 
+	    <!-- OpenAPI / Swagger UI: publishes the service metadata and API docs -->
+	    <dependency>
+	        <groupId>org.springdoc</groupId>
+	        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+	        <version>3.1.1</version>
+	    </dependency>
+
 	    <!-- H2 in-memory database for tests (no external MySQL required) -->
 	    <dependency>
 	        <groupId>com.h2database</groupId>

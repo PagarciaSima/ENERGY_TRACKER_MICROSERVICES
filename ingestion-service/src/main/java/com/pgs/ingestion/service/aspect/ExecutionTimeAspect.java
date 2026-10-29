@@ -10,11 +10,18 @@ import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Aspect that measures and logs the execution time of the controller methods.
+ */
 @Aspect
 @Component
 @Slf4j
 public class ExecutionTimeAspect {
 
+    /**
+     * Pointcut matching all methods of every class in the
+     * {@code com.pgs.ingestion.service.controller} package.
+     */
     @Pointcut("execution(* com.pgs.ingestion.service.controller.*.*(..))")
     public void controllerMethods() {}
 

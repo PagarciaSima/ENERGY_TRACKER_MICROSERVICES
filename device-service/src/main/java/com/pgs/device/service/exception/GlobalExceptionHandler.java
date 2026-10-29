@@ -10,11 +10,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.pgs.device.service.dto.ErrorResponse;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Global exception handler for REST controllers.
  * <p>
- * Converts application exceptions into appropriate HTTP responses.
+ * Converts application exceptions into appropriate HTTP responses and logs the
+ * failure so it can be traced.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -29,6 +33,7 @@ public class GlobalExceptionHandler {
         String msg = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
                 .collect(Collectors.joining(", "));
+        log.warn("Request validation failed: {}", msg);
 
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.builder()
@@ -46,6 +51,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
+        log.error("Unexpected error while processing the request", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.builder()
                         .status(500)
@@ -62,6 +68,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(DeviceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(DeviceNotFoundException ex) {
+        log.warn("Device not found: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.builder()
                         .status(404)

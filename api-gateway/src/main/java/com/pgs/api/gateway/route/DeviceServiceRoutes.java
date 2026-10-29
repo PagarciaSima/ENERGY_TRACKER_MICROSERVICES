@@ -16,9 +16,21 @@ import static org.springframework.cloud.gateway.server.mvc.filter.FilterFunction
 import static org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions.route;
 import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFunctions.http;
 
+/**
+ * Route definitions for the Device Service.
+ * <p>
+ * Registers the {@code /api/v1/device/**} route with a circuit breaker and a
+ * {@code 503} fallback, plus a route that proxies the service's OpenAPI spec.
+ */
 @Configuration
 public class DeviceServiceRoutes {
 
+    /**
+     * Routes {@code /api/v1/device/**} to the Device Service, guarded by a circuit
+     * breaker that forwards to the fallback route when the circuit is open.
+     *
+     * @return the device service router function
+     */
     @Bean
     RouterFunction<ServerResponse> deviceRoute() {
         return route("device-service")
@@ -30,6 +42,12 @@ public class DeviceServiceRoutes {
                 .build();
     }
 
+    /**
+     * Fallback route answered with {@code 503 Service Unavailable} when the device
+     * service circuit is open.
+     *
+     * @return the fallback router function
+     */
     @Bean
     RouterFunction<ServerResponse> deviceFallbackRoute() {
         return route("fallbackRoute")
@@ -39,6 +57,13 @@ public class DeviceServiceRoutes {
                 .build();
     }
 
+    /**
+     * Proxies the Device Service OpenAPI document under
+     * {@code /docs/device-service/v3/api-docs} so it can be aggregated in the
+     * gateway's Swagger UI.
+     *
+     * @return the API docs proxy router function
+     */
     @Bean
     RouterFunction<ServerResponse> deviceServiceApiDocs() {
         return GatewayRouterFunctions.route("device-service-api-docs")

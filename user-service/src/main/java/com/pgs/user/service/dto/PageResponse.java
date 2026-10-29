@@ -47,6 +47,19 @@ public class PageResponse<T> {
     @Schema(description = "Whether the page has no elements", example = "false")
     private final boolean empty;
 
+    /**
+     * Creates a pagination wrapper. Instances are normally obtained through
+     * {@link #of(Page)} rather than by calling this constructor directly.
+     *
+     * @param content       the elements of the current page
+     * @param page          the current page index (zero-based)
+     * @param size          the page size
+     * @param totalElements the total number of elements across all pages
+     * @param totalPages    the total number of pages
+     * @param first         whether this is the first page
+     * @param last          whether this is the last page
+     * @param empty         whether the page has no elements
+     */
     private PageResponse(List<T> content, int page, int size, long totalElements, int totalPages,
                          boolean first, boolean last, boolean empty) {
         this.content = content;
@@ -78,34 +91,74 @@ public class PageResponse<T> {
                 page.isEmpty());
     }
 
+    /**
+     * Returns the elements of the current page.
+     *
+     * @return the elements of the current page
+     */
     public List<T> getContent() {
         return content;
     }
 
+    /**
+     * Returns the current page index (zero-based).
+     *
+     * @return the current page index
+     */
     public int getPage() {
         return page;
     }
 
+    /**
+     * Returns the page size.
+     *
+     * @return the page size
+     */
     public int getSize() {
         return size;
     }
 
+    /**
+     * Returns the total number of elements across all pages.
+     *
+     * @return the total number of elements
+     */
     public long getTotalElements() {
         return totalElements;
     }
 
+    /**
+     * Returns the total number of pages.
+     *
+     * @return the total number of pages
+     */
     public int getTotalPages() {
         return totalPages;
     }
 
+    /**
+     * Indicates whether this is the last page.
+     *
+     * @return {@code true} if this is the last page
+     */
     public boolean isLast() {
         return last;
     }
 
+    /**
+     * Indicates whether this is the first page.
+     *
+     * @return {@code true} if this is the first page
+     */
     public boolean isFirst() {
         return first;
     }
 
+    /**
+     * Indicates whether the page has no elements.
+     *
+     * @return {@code true} if the page is empty
+     */
     public boolean isEmpty() {
         return empty;
     }

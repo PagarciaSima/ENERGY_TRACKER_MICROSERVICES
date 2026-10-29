@@ -81,7 +81,7 @@ Readings persist as InfluxDB points in the `energy_usage` measurement. Aggregate
 
 The single query endpoint is under the base path `/api/v1/usage`.
 
-> Interactive docs available at [Swagger UI](http://localhost:8083/swagger-ui.html) (OpenAPI spec at [`/v3/api-docs`](http://localhost:8083/v3/api-docs)).
+> Interactive docs available at [Swagger UI](http://localhost:8083/swagger-ui.html) (OpenAPI spec at [`/v3/api-docs`](http://localhost:8083/v3/api-docs), group `usage`).
 
 | Method | Path              | Description                                              | HTTP statuses                           |
 | ------ | ----------------- | -------------------------------------------------------- | --------------------------------------- |
@@ -220,17 +220,30 @@ InfluxDB is initialised on first run with:
 | `influx.bucket`                            | `usage-bucket`                            | InfluxDB bucket                          |
 | `device.service.url`                       | `http://localhost:8081/api/v1/device`     | Device Service base URL                  |
 | `user.service.url`                         | `http://localhost:8080/api/v1/user`       | User Service base URL                    |
+| `springdoc.swagger-ui.path`                | `/swagger-ui.html`                        | Swagger UI path                          |
+| `springdoc.api-docs.path`                  | `/v3/api-docs`                            | OpenAPI spec path                        |
+| `springdoc.group-configs[0].group`          | `usage`                                   | OpenAPI group for the usage endpoints    |
 
 ---
 ## 🧪 Testing
 
-Currently the module ships a single smoke test that loads the Spring context (`UsageServiceApplicationTests`). Kafka, InfluxDB and the remote HTTP services are provided by the test environment or stubbed at the boundary.
+The suite runs **without external infrastructure** (no Docker / Kafka / InfluxDB required): the Spring context smoke test uses the test configuration, and the HTTP clients are unit-tested against a mocked `RestServer`.
 
 Run the tests with:
 
 ```bash
-mvn test
+cd usage-service
+./mvnw test          # macOS/Linux
+.\mvnw.cmd test      # Windows
 ```
+
+| Test                             | Level       | What it verifies                                       |
+| -------------------------------- | ----------- | ------------------------------------------------------ |
+| `UsageServiceApplicationTests`   | Smoke       | The Spring application context loads                   |
+| `DeviceClientTest`               | Unit        | `DeviceClient` maps device responses / handles errors  |
+| `UserClientTest`                 | Unit        | `UserClient` maps user responses / handles errors      |
+
+> Aggregation, threshold checks and the Kafka listener are **not** covered yet — see the [Roadmap](#-roadmap).
 
 ---
 
@@ -267,7 +280,9 @@ usage-service
 │   │   │       │   ├── DeviceClient.java
 │   │   │       │   └── UserClient.java
 │   │   │       ├── config
-│   │   │       │   └── InfluxDBConfig.java
+│   │   │       │   ├── InfluxDBConfig.java
+│   │   │       │   ├── OpenApiConfig.java
+│   │   │       │   └── RestClientConfig.java
 │   │   │       ├── controller
 │   │   │       │   └── UsageController.java
 │   │   │       ├── dto
@@ -286,7 +301,10 @@ usage-service
 │   │       └── application.properties
 │   └── test
 │       └── java/com/pgs/usage/service
-│           └── UsageServiceApplicationTests.java
+│           ├── UsageServiceApplicationTests.java
+│           └── client
+│               ├── DeviceClientTest.java
+│               └── UserClientTest.java
 ```
 
 ---
@@ -298,3 +316,4 @@ usage-service
 - [ ] Add an E2E test with a real Kafka + InfluxDB via Testcontainers.
 - [ ] Add an outbox / durable source of truth for alert events to avoid loss if Kafka is down.
 - [ ] Add graceful fallback if Device / User services are temporarily unreachable during aggregation.
+- [ ] Expose the usage API through the API Gateway (no route registered yet).

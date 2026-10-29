@@ -1,10 +1,21 @@
 {
   "info": {
-    "name": "ENERGY_TRACKER - User, Device, Ingestion, Usage & Insight Services",
-    "description": "Collection to test the microservices of the Home Energy Tracker platform: user (port 8080), device (port 8081), ingestion (port 8082), usage (port 8083) and insight (port 8085). The alert-service (port 8084) does not expose REST endpoints (it consumes Kafka events). Ids in the paths use variables so they can be reused.",
+    "name": "ENERGY_TRACKER - Security (Keycloak), API Gateway & Microservices",
+    "description": "Collection to test the Home Energy Tracker platform. Folders: Security (Keycloak) to obtain a JWT access token (Keycloak on port 8091, realm het-security-realm, client home-energy-tracker-client), API Gateway (port 9000) to exercise the routed endpoints with that token, and the direct service folders: user (8080), device (8081), ingestion (8082), usage (8083) and insight (8085). The alert-service (8084) exposes no REST endpoints (it consumes Kafka events). The gateway validates the Bearer token on every routed path, while actuator and Swagger UI stay public. Run the \"Get access token (password grant)\" request first: it stores the token in the accessToken collection variable, which every other request inherits.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
+    { "key": "gatewayBaseUrl", "value": "http://localhost:9000" },
+    { "key": "keycloakBaseUrl", "value": "http://localhost:8091" },
+    { "key": "realm", "value": "het-security-realm" },
+    { "key": "keycloakTokenUrl", "value": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/token" },
+    { "key": "keycloakIssuerUrl", "value": "{{keycloakBaseUrl}}/realms/{{realm}}" },
+    { "key": "clientId", "value": "home-energy-tracker-client" },
+    { "key": "clientSecret", "value": "KHe2IG9JY8uWoSqi8l2gbm5GOLXkVewm", "type": "secret" },
+    { "key": "username", "value": "test-user" },
+    { "key": "password", "value": "test-password" },
+    { "key": "accessToken", "value": "", "type": "secret" },
+    { "key": "refreshToken", "value": "", "type": "secret" },
     { "key": "userBaseUrl", "value": "http://localhost:8080" },
     { "key": "deviceBaseUrl", "value": "http://localhost:8081" },
     { "key": "ingestionBaseUrl", "value": "http://localhost:8082" },
@@ -13,7 +24,452 @@
     { "key": "userId", "value": "1" },
     { "key": "deviceId", "value": "1" }
   ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
   "item": [
+    {
+      "name": "🔐 Security (Keycloak)",
+      "item": [
+        {
+          "name": "Get access token (password grant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.access_token) {",
+                  "    pm.collectionVariables.set('accessToken', json.access_token);",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "    }",
+                  "    pm.test('Access token stored in the accessToken collection variable', function () {",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Token endpoint returned an access_token', function () {",
+                  "        pm.expect.fail('No access_token in response: ' + pm.response.text());",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{clientSecret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakBaseUrl}}"
+              ],
+              "path": [
+                "realms",
+                "{{realm}}",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Obtains an access token with the Resource Owner Password Credentials grant. Set the username/password collection variables to a real user of the het-security-realm realm before running it. The test script stores the returned token in the accessToken collection variable (and the refresh token in refreshToken), so every other request inherits it as a Bearer token. Responses: 200 / 400 (invalid grant) / 401 (bad credentials)."
+          }
+        },
+        {
+          "name": "Get access token (client credentials)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.access_token) {",
+                  "    pm.collectionVariables.set('accessToken', json.access_token);",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "    }",
+                  "    pm.test('Access token stored in the accessToken collection variable', function () {",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Token endpoint returned an access_token', function () {",
+                  "        pm.expect.fail('No access_token in response: ' + pm.response.text());",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{clientSecret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakBaseUrl}}"
+              ],
+              "path": [
+                "realms",
+                "{{realm}}",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Service-to-service token using the Client Credentials grant (no end user involved). The test script stores the token in accessToken. Responses: 200 / 400 / 401."
+          }
+        },
+        {
+          "name": "Refresh access token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.access_token) {",
+                  "    pm.collectionVariables.set('accessToken', json.access_token);",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "    }",
+                  "    pm.test('Access token stored in the accessToken collection variable', function () {",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Token endpoint returned an access_token', function () {",
+                  "        pm.expect.fail('No access_token in response: ' + pm.response.text());",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{clientSecret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refreshToken}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakBaseUrl}}"
+              ],
+              "path": [
+                "realms",
+                "{{realm}}",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Renews the access token using the refresh token captured by the password-grant request. Both accessToken and refreshToken collection variables are updated by the test script. Responses: 200 / 400 (invalid or expired refresh token)."
+          }
+        },
+        {
+          "name": "Keycloak OpenID configuration",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{keycloakBaseUrl}}/realms/{{realm}}/.well-known/openid-configuration",
+              "host": [
+                "{{keycloakBaseUrl}}"
+              ],
+              "path": [
+                "realms",
+                "{{realm}}",
+                ".well-known",
+                "openid-configuration"
+              ]
+            },
+            "description": "Discovery document of the realm: issuer, jwks_uri, token_endpoint, supported grant types, etc. Useful to verify the realm is up and to cross-check the values configured in the gateway. Response: 200."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚪 API Gateway (routed, Bearer JWT)",
+      "item": [
+        {
+          "name": "Get user by id (via gateway)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/user/{{userId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "{{userId}}"
+              ]
+            },
+            "description": "Routed to user-service (:8080) through the gateway. Inherits the collection Bearer token. Responses: 200 / 401 (missing or invalid JWT) / 404 / 503 (circuit open)."
+          }
+        },
+        {
+          "name": "List users (paginated, via gateway)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/user/page?page=0&size=10",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "page"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Page index (0-based). Min 0."
+                },
+                {
+                  "key": "size",
+                  "value": "10",
+                  "description": "Page size. Between 1 and 100."
+                }
+              ]
+            },
+            "description": "Routed to user-service through the gateway. Responses: 200 (PageResponse) / 401 / 503."
+          }
+        },
+        {
+          "name": "Get device by id (via gateway)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/device/{{deviceId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "device",
+                "{{deviceId}}"
+              ]
+            },
+            "description": "Routed to device-service (:8081) through the gateway. Responses: 200 / 401 / 404 / 503."
+          }
+        },
+        {
+          "name": "Ingest energy usage (via gateway)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": 42,\n  \"energyConsumed\": 3.5,\n  \"timestamp\": \"2026-10-04T15:30:45Z\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/ingestion",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion"
+              ]
+            },
+            "description": "Routed to ingestion-service (:8082), which validates the reading and publishes it to Kafka. Responses: 201 / 400 (validation) / 401 / 503."
+          }
+        },
+        {
+          "name": "Get saving tips (via gateway)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/insight/saving-tips/{{userId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "insight",
+                "saving-tips",
+                "{{userId}}"
+              ]
+            },
+            "description": "Routed to insight-service (:8085), which pulls aggregated usage and asks the LLM for personalized saving tips. Responses: 200 (InsightDto) / 400 / 401 / 500 / 503."
+          }
+        },
+        {
+          "name": "Get usage for user (via gateway)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/usage/{{userId}}?days=3",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "usage",
+                "{{userId}}"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "3"
+                }
+              ]
+            },
+            "description": "Routed to usage-service (:8083) through the gateway. Returns the aggregated energy usage of the user's devices over the last N days. Responses: 200 (UsageDto) / 400 / 401 / 404 / 500 / 503 (circuit open)."
+          }
+        },
+        {
+          "name": "Circuit breaker fallback (503)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/v1/user/{{userId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "{{userId}}"
+              ]
+            },
+            "description": "Stop user-service and call this request repeatedly: once the sliding-window threshold is reached the gateway opens the circuit and answers 503 Service Unavailable with the plain-text body \"User service is down\". Inspect the breaker state at {{gatewayBaseUrl}}/actuator/circuitbreakers."
+          }
+        }
+      ]
+    },
     {
       "name": "User Service",
       "item": [

@@ -20,6 +20,7 @@ It does **not** decide *when* an alert must be raised: detection logic lives in 
 - [Data Model](#-data-model)
 - [Getting Started](#-getting-started)
 - [Configuration](#-configuration)
+- [API Docs](#-api-docs)
 - [Testing](#-testing)
 - [Project Structure](#-project-structure)
 - [Roadmap](#-roadmap)
@@ -59,6 +60,7 @@ flowchart LR
 | MySQL                | 8          | Production database                        |
 | H2                   | (SB)       | Embedded DB for tests                      |
 | Flyway               | (SB)       | Database migrations                        |
+| SpringDoc OpenAPI    | 3.1.1      | Service metadata / Swagger UI              |
 | Lombok               | 1.18.36    | Boilerplate reduction                      |
 | Maven                | —          | Build tool                                 |
 | Docker               | —          | Local infra via `docker-compose`           |
@@ -169,6 +171,19 @@ Paste a JSON event and press Enter; the email appears in the **Mailpit** UI at `
 | `spring.kafka.consumer.group-id`               | `alert-service`                | Consumer group id                        |
 | `spring.datasource.url`                        | `jdbc:mysql://localhost:3306/home_energy_tracker_alert` | Alert database   |
 | `spring.mail.host` / `spring.mail.port`        | `localhost` / `1025`           | SMTP server (Mailpit)                    |
+| `springdoc.swagger-ui.path`                    | `/swagger-ui.html`             | Swagger UI path                          |
+| `springdoc.api-docs.path`                      | `/v3/api-docs`                 | OpenAPI spec path                        |
+
+---
+
+## 📖 API Docs
+
+The service is a pure Kafka consumer and exposes **no REST endpoints** of its own, but it still ships the OpenAPI integration so its metadata and actuator surface are documented like the rest of the platform:
+
+- Swagger UI → `http://localhost:8084/swagger-ui.html`
+- OpenAPI spec → `http://localhost:8084/v3/api-docs`
+
+The document is declared in `config/OpenApiConfig.java` (`@OpenAPIDefinition`). No `springdoc.group-configs` entry is registered because there are no REST paths to group; the alerting behaviour is documented as an event flow in the sections above.
 
 ---
 
@@ -205,7 +220,8 @@ alert-service
 │   │   │   │   ├── ExecutionTimeAspect.java
 │   │   │   │   └── LoggingAspect.java
 │   │   │   ├── config
-│   │   │   │   └── KafkaConfig.java
+│   │   │   │   ├── KafkaConfig.java
+│   │   │   │   └── OpenApiConfig.java
 │   │   │   ├── entity
 │   │   │   │   └── Alert.java
 │   │   │   ├── repository

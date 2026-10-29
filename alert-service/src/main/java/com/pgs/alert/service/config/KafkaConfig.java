@@ -34,6 +34,12 @@ public class KafkaConfig {
     private final String alertTopic;
     private final String alertDltTopic;
 
+    /**
+     * Creates the Kafka configuration binding the alert and dead-letter topic names.
+     *
+     * @param alertTopic    the topic the service consumes alerts from
+     * @param alertDltTopic the dead-letter topic failed alerts are republished to
+     */
     public KafkaConfig(
             @Value("${app.kafka.alerts.topic}") String alertTopic,
             @Value("${app.kafka.alerts.dlt-topic}") String alertDltTopic) {
@@ -50,7 +56,7 @@ public class KafkaConfig {
      * @return the retryable / dead-letter aware error handler
      */
     @Bean
-    public CommonErrorHandler commonErrorHandler(KafkaTemplate<?, ?> deadLetterTemplate) {
+     CommonErrorHandler commonErrorHandler(KafkaTemplate<?, ?> deadLetterTemplate) {
         final FixedBackOff backOff = new FixedBackOff(RETRY_BACKOFF_MS, MAX_ATTEMPTS - 1L);
         return new DefaultErrorHandler(
                 new DeadLetterPublishingRecoverer(deadLetterTemplate, destinationResolver()),

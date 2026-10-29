@@ -9,11 +9,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Aspect that measures and logs the execution time of the controller methods.
+ */
 @Aspect
 @Component
 @Slf4j
 public class ExecutionTimeAspect {
 
+    /**
+     * Pointcut matching all methods of every class in the
+     * {@code com.pgs.user.service.controller} package.
+     */
     @Pointcut("execution(* com.pgs.user.service.controller.*.*(..))")
     public void controllerMethods() {}
 

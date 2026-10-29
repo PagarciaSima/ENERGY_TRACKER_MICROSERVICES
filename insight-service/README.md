@@ -258,7 +258,7 @@ ollama pull deepseek-coder
 | `spring.ai.ollama.init.pull-model-strategy` | `never`                             | Do not pull the model on startup              |
 | `management.endpoints.web.exposure.include` | `health,info,prometheus`           | Actuator endpoints exposed                    |
 | `springdoc.swagger-ui.path`             | `/swagger-ui.html`                     | Swagger UI path                               |
-| `springdoc.group-config[0].group`       | `insight`                              | OpenAPI group for the insight endpoints       |
+| `springdoc.group-configs[0].group`       | `insight`                              | OpenAPI group for the insight endpoints       |
 
 > `spring.ai.ollama.init.pull-model-strategy=never` means the service **will not** download the model: it must already be present in Ollama, otherwise every call fails with a `500`.
 

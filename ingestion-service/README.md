@@ -54,7 +54,6 @@ Publishing is **fire-and-forget**: `send` returns immediately once the message i
 | Spring WebMVC       | (SB)       | REST controller                          |
 | Spring for Kafka    | (SB)       | Kafka producer (`KafkaTemplate`)         |
 | AspectJ (Spring AOP)| (SB)       | Aspect-oriented logging / timing          |
-
 | Apache Kafka        | KRaft      | Message broker (local infra via docker)   |
 | jackson-datatype-jsr310 | —       | `Instant` / time API serialization        |
 | SpringDoc OpenAPI   | 3.1.1      | Swagger UI / API documentation            |
@@ -70,7 +69,7 @@ Publishing is **fire-and-forget**: `send` returns immediately once the message i
 
 The single endpoint is under the base path `/api/v1/ingestion`.
 
-> Interactive docs available at [Swagger UI](http://localhost:8082/swagger-ui.html) (OpenAPI spec at [`/v3/api-docs`](http://localhost:8082/v3/api-docs)).
+> Interactive docs available at [Swagger UI](http://localhost:8082/swagger-ui.html) (OpenAPI spec at [`/v3/api-docs`](http://localhost:8082/v3/api-docs), group `ingestion`).
 
 | Method | Path               | Description                                  | Status codes              |
 | ------ | ------------------ | -------------------------------------------- | ------------------------- |
@@ -176,6 +175,9 @@ Configuration lives in `src/main/resources/application.properties`. Sensitive an
 | `simulation.interval-ms`                      | `60000`                                          | Interval (ms) between batches   |
 | `simulation.parallel-threads`                 | `10`                                             | Threads used by the parallel simulator |
 | `management.endpoints.web.exposure.include`   | `health,info,prometheus`                        | Actuator endpoints exposed      |
+| `springdoc.swagger-ui.path`                   | `/swagger-ui.html`                              | Swagger UI path                 |
+| `springdoc.api-docs.path`                     | `/v3/api-docs`                                  | OpenAPI spec path               |
+| `springdoc.group-configs[0].group`             | `ingestion`                                     | OpenAPI group for the ingestion endpoint |
 
 The application runs with the `default` (dev) profile and exposes health/info/Prometheus metrics via Spring Actuator.
 
@@ -316,7 +318,7 @@ ingestion-service
 
 - [ ] Enable the `@Scheduled` trigger to run the data simulators automatically.
 - [ ] Add a sync/acknowledgement endpoint or durable outbox to avoid losing messages if Kafka is down.
-- [ ] Add OpenAPI error schema polish and response examples for all endpoints.
+- [ ] Add request size / rate limiting on the ingestion endpoint.
 - [ ] Add Kafka health-check and producer failure metrics (e.g. Prometheus counters).
 - [ ] Add graceful fallback / retry with backoff when the broker is temporarily unavailable.
 - [ ] Add an E2E test with a real Kafka broker via Testcontainers.

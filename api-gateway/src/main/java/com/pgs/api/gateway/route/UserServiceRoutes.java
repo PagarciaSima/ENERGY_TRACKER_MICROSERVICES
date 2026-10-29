@@ -16,9 +16,21 @@ import org.springframework.web.servlet.function.RequestPredicates;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerResponse;
 
+/**
+ * Route definitions for the User Service.
+ * <p>
+ * Registers the {@code /api/v1/user/**} route with a circuit breaker and a
+ * {@code 503} fallback, plus a route that proxies the service's OpenAPI spec.
+ */
 @Configuration
 public class UserServiceRoutes {
 
+    /**
+     * Routes {@code /api/v1/user/**} to the User Service, guarded by a circuit
+     * breaker that forwards to the fallback route when the circuit is open.
+     *
+     * @return the user service router function
+     */
     @Bean
     RouterFunction<ServerResponse> userRoute() {
         return route("user-service")
@@ -31,6 +43,12 @@ public class UserServiceRoutes {
                 .build();
     }
 
+    /**
+     * Fallback route answered with {@code 503 Service Unavailable} when the user
+     * service circuit is open.
+     *
+     * @return the fallback router function
+     */
     @Bean
     RouterFunction<ServerResponse> userFallbackRoute() {
         return route("fallbackRoute")
@@ -40,6 +58,13 @@ public class UserServiceRoutes {
         .build();
     }
 
+    /**
+     * Proxies the User Service OpenAPI document under
+     * {@code /docs/user-service/v3/api-docs} so it can be aggregated in the
+     * gateway's Swagger UI.
+     *
+     * @return the API docs proxy router function
+     */
     @Bean
     RouterFunction<ServerResponse> userServiceApiDocs() {
         return GatewayRouterFunctions.route("user-service-api-docs")

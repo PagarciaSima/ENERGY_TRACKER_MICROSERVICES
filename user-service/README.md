@@ -55,6 +55,7 @@ Cache interactions between the Service and Redis use Spring Cache — `@Cacheabl
 | Spring WebMVC       | (SB)       | REST controllers                          |
 | Spring Data JPA     | (SB)       | Persistence / repositories                |
 | Hibernate           | (SB)       | ORM implementation                        |
+| AspectJ (Spring AOP)| (SB)       | Execution timing & method logging         |
 | MySQL               | 8          | Production database                       |
 | H2                  | 2.4.240    | Embedded DB for JPA slice tests           |
 | Redis               | —          | Cache layer (`users` cache)               |
@@ -517,6 +518,5 @@ user-service
 
 - [ ] Add request/response audit logging for mutations.
 - [ ] Introduce soft-delete (`deleted_at`) instead of hard DELETE.
-- [ ] Add OpenAPI error schema polish and response examples for all endpoints.
 - [ ] Add a search endpoint with sorting and a `like`/`eq` operator map.
 - [ ] Add graceful fallback to DB when Redis is temporarily unavailable.
