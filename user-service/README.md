@@ -281,13 +281,13 @@ The persistence model is intentionally simple: a single `User` entity mapped to 
 ```mermaid
 erDiagram
     USER {
-        BIGINT id PK "AUTO_INCREMENT"
-        VARCHAR name "NOT NULL"
+        BIGINT id PK AUTO_INCREMENT
+        VARCHAR name NOT NULL
         VARCHAR surname
-        VARCHAR email "NOT NULL, UNIQUE"
+        VARCHAR email NOT NULL UNIQUE
         TEXT address
-        TINYINT alerting "default 0"
-        DOUBLE energy_alerting_threshold "default 0"
+        TINYINT alerting default 0
+        DOUBLE energy_alerting_threshold default 0
     }
 ```
 
@@ -459,7 +459,7 @@ sequenceDiagram
     participant DB as MySQL
 
     Note over Client,Service: First request - CACHE MISS
-    Client->>Service: GET /api/v1/user/1 (getUserById)
+    Client->>Service: "GET /api/v1/user/1 (getUserById)"
     Service->>Cache: lookup key "1"
     Cache-->>Service: miss (null)
     Service->>DB: userRepository.findById(1)
@@ -468,7 +468,7 @@ sequenceDiagram
     Service-->>Client: 200 UserDto
 
     Note over Client,Service: Second request - CACHE HIT
-    Client->>Service: GET /api/v1/user/1
+    Client->>Service: "GET /api/v1/user/1"
     Service->>Cache: lookup key "1"
     Cache-->>Service: hit (cached UserDto)
     Service-->>Client: 200 UserDto (no DB call)

@@ -37,13 +37,15 @@ flowchart LR
         TopicAlr[(energy-alerts)]
     end
 
-    UsgDB[(InfluxDB - usage-bucket)]
-    RepoDev(Device Service :8081)
-    RepoUsr(User Service :8080)
+    UsgDB[["InfluxDB - usage-bucket"]]
+    RepoDev[["Device Service (:8081)"]]
+    RepoUsr[["User Service (:8080)"]]
 
     TopicUsg -->|"@KafkaListener"| Svc[UsageService]
     Svc -->|write API| UsgDB
-    Svc -->|"@Scheduled"| Svc
+    Sched["@Scheduled (every 10s)"]
+    Svc --> Sched
+    Sched --> Svc
     Svc -->|get devices| RepoDev
     Svc -->|get user + alerting| RepoUsr
     Svc -->|AlertingEvent| TopicAlr

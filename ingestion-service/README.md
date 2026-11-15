@@ -270,11 +270,11 @@ sequenceDiagram
     participant Service as IngestionService
     participant Kafka as Kafka (energy-usage)
 
-    Client->>Service: POST /api/v1/ingestion {deviceId, energyConsumed, timestamp}
+    Client->>Service: "POST /api/v1/ingestion {deviceId, energyConsumed, timestamp}"
     Service->>Service: validate + map to EnergyUsageEvent
     Service->>Kafka: send(event)
-    Service-->>Client: 201 Created (fire-and-forget)
-    Kafka-->>Service: whenComplete (log partition/offset or error)
+    Service-->>Client: "201 Created (fire-and-forget)"
+    Kafka-->>Service: "whenComplete (log partition/offset or error)"
 ```
 
 Because the producer is fire-and-forget, ingestion latency is minimal and is decoupled from the processing that downstream consumers (Usage, Insight, Alert) perform asynchronously.

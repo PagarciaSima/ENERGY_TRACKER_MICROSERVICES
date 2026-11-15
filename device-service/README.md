@@ -258,11 +258,11 @@ The persistence model is intentionally simple: a single `Device` entity mapped t
 ```mermaid
 erDiagram
     DEVICE {
-        BIGINT id PK "AUTO_INCREMENT"
-        VARCHAR name "NOT NULL"
-        VARCHAR type "NOT NULL"
+        BIGINT id PK AUTO_INCREMENT
+        VARCHAR name NOT NULL
+        VARCHAR type NOT NULL
         VARCHAR location
-        BIGINT user_id "NOT NULL"
+        BIGINT user_id NOT NULL
     }
 ```
 
@@ -440,7 +440,7 @@ sequenceDiagram
     participant DB as MySQL
 
     Note over Client,Service: First request - CACHE MISS
-    Client->>Service: GET /api/v1/device/1 (getDeviceById)
+    Client->>Service: "GET /api/v1/device/1 (getDeviceById)"
     Service->>Cache: lookup key "1"
     Cache-->>Service: miss (null)
     Service->>DB: deviceRepository.findById(1)
@@ -449,7 +449,7 @@ sequenceDiagram
     Service-->>Client: 200 DeviceDto
 
     Note over Client,Service: Second request - CACHE HIT
-    Client->>Service: GET /api/v1/device/1
+    Client->>Service: "GET /api/v1/device/1"
     Service->>Cache: lookup key "1"
     Cache-->>Service: hit (cached DeviceDto)
     Service-->>Client: 200 DeviceDto (no DB call)

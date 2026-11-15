@@ -70,7 +70,7 @@ flowchart TB
     end
 
     subgraph ExternalCollaborators["External Systems"]
-        OllamaLLM[("Ollama LLM (:11434)\nllama3.2")]
+        OllamaLLM[("Ollama LLM (:11434)<br/>llama3.2")]
         MailpitSMTP[("Mailpit SMTP & Web UI (:1025 / :8025)")]
     end
 
@@ -228,12 +228,12 @@ sequenceDiagram
     participant Usage as Usage Service (:8083)
     participant Influx as InfluxDB
 
-    IoT->>Ingestion: POST /api/v1/ingestion {deviceId: 42, energyConsumed: 3.5, timestamp}
+    IoT->>Ingestion: "POST /api/v1/ingestion {deviceId: 42, energyConsumed: 3.5, timestamp}"
     Note over Ingestion: Validate payload (@PastOrPresent, @PositiveOrZero)
     Ingestion->>Kafka: send(EnergyUsageEvent) [fire-and-forget]
     Ingestion-->>IoT: 201 Created
     Kafka-->>Usage: @KafkaListener consumes EnergyUsageEvent
-    Usage->>Influx: Write Point (measurement: energy_usage, tag: deviceId, field: energyConsumed)
+    Usage->>Influx: "Write Point (measurement: energy_usage, tag: deviceId, field: energyConsumed)"
 ```
 
 ![InfluxDB Data Explorer](img/influxdb.png)
@@ -255,8 +255,7 @@ sequenceDiagram
     Scheduler->>Influx: Query hourly sum of energyConsumed per device
     Scheduler->>DeviceSvc: GET /api/v1/device/{deviceId} (resolve the owner)
     Scheduler->>UserSvc: GET /api/v1/user/:userId
-    Note over Scheduler: If user.alerting == true AND totalConsumed > threshold:
-    Note over Scheduler: AND no alert was sent for that user within the cooldown<br/>(app.alerting.cooldown-minutes, in-memory state)
+    Note over Scheduler: "If user.alerting == true AND totalConsumed > threshold:<br/>AND no alert was sent for that user within the cooldown<br/>(app.alerting.cooldown-minutes, in-memory state)"
     Scheduler->>Kafka: send(AlertingEvent)
     Kafka-->>AlertSvc: @KafkaListener consumes AlertingEvent
     AlertSvc->>Mailpit: Dispatch Email via JavaMailSender
@@ -279,7 +278,7 @@ sequenceDiagram
     participant Usage as Usage Service (:8083)
     participant Ollama as Ollama ChatModel (:11434)
 
-    User->>Insight: GET /api/v1/insight/saving-tips/{userId}
+    User->>Insight: "GET /api/v1/insight/saving-tips/{userId}"
     Insight->>Usage: GET /api/v1/usage/{userId}?days=3
     Usage-->>Insight: UsageDto {userId, devices: [{name, energyConsumed}, ...]}
     Note over Insight: Aggregate total energy usage & format prompt
@@ -495,9 +494,9 @@ The repository applies modern testing practices across all layers:
 
 ```mermaid
 flowchart TD
-    Unit["Fast Unit Tests\n(JUnit 5, Mockito, AssertJ)\nIsolated business logic, no Spring context"]
-    Slice["Spring Slice Tests\n(@WebMvcTest, @DataJpaTest, H2 in-memory)\nWeb contract & repository specification validation"]
-    Integration["Integration & E2E Tests\n(Testcontainers, @EmbeddedKafka)\nReal MySQL, Redis, and Kafka in Docker"]
+    Unit["Fast Unit Tests<br/>(JUnit 5, Mockito, AssertJ)<br/>Isolated business logic, no Spring context"]
+    Slice["Spring Slice Tests<br/>(@WebMvcTest, @DataJpaTest, H2 in-memory)<br/>Web contract & repository specification validation"]
+    Integration["Integration & E2E Tests<br/>(Testcontainers, @EmbeddedKafka)<br/>Real MySQL, Redis, and Kafka in Docker"]
 
     Unit --> Slice --> Integration
 ```

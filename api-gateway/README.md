@@ -46,7 +46,7 @@ flowchart LR
     end
 
     GW -.->|"verifies signature via JWKS"| KC
-    GW -.->|CircuitBreaker open| Fallback["/fallbackRoute/<service> -> 503"]
+    GW -.->|CircuitBreaker open| Fallback["/fallbackRoute/[service] -> 503"]
     GW -.->|"missing / invalid token"| Denied["401 Unauthorized"]
 ```
 
